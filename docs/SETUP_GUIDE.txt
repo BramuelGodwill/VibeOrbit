@@ -1,0 +1,517 @@
+# VibeOrbit — Complete Step-by-Step Setup & Deployment Guide
+# Every single click documented. Beginner friendly.
+
+═══════════════════════════════════════════════════════════════
+ BEFORE YOU START — ACCOUNTS TO CREATE (Do these first)
+═══════════════════════════════════════════════════════════════
+
+1. github.com         — stores your code
+2. neon.tech          — your free PostgreSQL database
+3. cloudinary.com     — stores your audio files & images
+4. render.com         — hosts your backend (Node.js server)
+5. netlify.com        — hosts your frontend (Next.js website)
+
+All are FREE. Sign up with GitHub for all of them (easier).
+
+═══════════════════════════════════════════════════════════════
+ STEP 1 — INSTALL SOFTWARE ON YOUR COMPUTER
+═══════════════════════════════════════════════════════════════
+
+─── 1A. Install Node.js ───────────────────────────────────────
+1. Go to: nodejs.org
+2. Click the BIG GREEN button that says "LTS"
+3. Download and run the installer
+4. Click Next → Next → Install (don't change anything)
+5. VERIFY: Open a terminal and type:
+      node --version
+   You should see something like: v20.11.0
+
+─── 1B. Install Git ───────────────────────────────────────────
+1. Go to: git-scm.com/downloads
+2. Click Download for your OS
+3. Run the installer, click Next through everything
+4. VERIFY:
+      git --version
+   You should see: git version 2.44.0
+
+─── 1C. Install Visual Studio Code ────────────────────────────
+1. Go to: code.visualstudio.com
+2. Download and install for your OS
+3. On the "Additional Tasks" screen, CHECK ALL CHECKBOXES
+4. Open VS Code after installing
+
+─── 1D. Install These VS Code Extensions ─────────────────────
+Click the Extensions icon (4 squares on left sidebar), search each:
+  - ESLint
+  - Prettier - Code formatter
+  - Thunder Client  ← use this to test your API
+  - Tailwind CSS IntelliSense
+  - GitLens
+
+═══════════════════════════════════════════════════════════════
+ STEP 2 — SET UP YOUR ONLINE ACCOUNTS
+═══════════════════════════════════════════════════════════════
+
+─── 2A. GitHub Account ────────────────────────────────────────
+1. Go to github.com → click Sign up
+2. Enter email → choose password → choose username
+3. Verify your email
+
+─── 2B. Neon Database ─────────────────────────────────────────
+1. Go to neon.tech → click Sign Up
+2. Click "Continue with GitHub"
+3. After login → click "Create a project"
+4. Name: vibeorbit
+5. Region: eu-west-1 (closest to Kenya)
+6. Click Create project
+7. ⭐ COPY the connection string — it looks like:
+   postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require
+8. Save it in Notepad — you need it later!
+
+─── 2C. Cloudinary Storage ────────────────────────────────────
+1. Go to cloudinary.com → click Sign Up For Free
+2. Fill in name, email, password → click Create Account
+3. Verify your email → log back in
+4. On the Dashboard, copy these 3 values (save in Notepad):
+   - Cloud Name   (e.g. mycloudname)
+   - API Key      (e.g. 123456789012345)
+   - API Secret   (click the eye icon to reveal it)
+
+─── 2D. Render (Backend Hosting) ──────────────────────────────
+1. Go to render.com → click Get Started for Free
+2. Click "Continue with GitHub"
+3. Authorize Render
+4. That's it for now — you'll deploy here later
+
+─── 2E. Netlify (Frontend Hosting) ────────────────────────────
+1. Go to netlify.com → click Sign up
+2. Click "GitHub"
+3. Authorize Netlify
+4. That's it for now — you'll deploy here later
+
+═══════════════════════════════════════════════════════════════
+ STEP 3 — OPEN THE PROJECT IN VS CODE
+═══════════════════════════════════════════════════════════════
+
+1. Download the vibeorbit project folder (this file is inside it)
+2. Move the vibeorbit folder to your Desktop
+3. Open VS Code
+4. Click File → Open Folder
+5. Navigate to Desktop → click "vibeorbit" → click Select Folder
+6. VS Code loads with the project in the sidebar on the left
+7. Press Ctrl+` (backtick key, top-left) to open the terminal
+
+═══════════════════════════════════════════════════════════════
+ STEP 4 — CREATE YOUR .env FILES (SECRET KEYS)
+═══════════════════════════════════════════════════════════════
+
+─── 4A. Backend .env file ─────────────────────────────────────
+In the VS Code left sidebar:
+1. Click on the "backend" folder to expand it
+2. You see a file called ".env.example"
+3. RIGHT-CLICK on ".env.example" → click "Copy"
+4. RIGHT-CLICK on the "backend" folder → click "Paste"
+5. RIGHT-CLICK on the copied file → click "Rename"
+6. Rename it to: .env  (just .env, nothing else)
+7. Click on .env to open it
+8. Fill in your real values:
+
+──────────────────────────────────────────
+FILE: backend/.env  (fill in YOUR values)
+──────────────────────────────────────────
+PORT=5000
+
+# Paste your Neon connection string here:
+DATABASE_URL=postgresql://user:password@ep-xxx.neon.tech/neondb?sslmode=require
+
+# Make this random and long:
+JWT_SECRET=VibeOrbit2024ChangeThisToSomethingRandom123
+
+# From cloudinary.com dashboard:
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key_number
+CLOUDINARY_API_SECRET=your_api_secret
+
+# Your Gmail + App Password (see Step 4B below):
+EMAIL_USER=yourname@gmail.com
+EMAIL_PASS=abcdefghijklmnop
+
+# From developer.safaricom.co.ke (see Step 4C below):
+MPESA_CONSUMER_KEY=your_key
+MPESA_CONSUMER_SECRET=your_secret
+MPESA_SHORTCODE=174379
+MPESA_PASSKEY=your_passkey
+
+# Update after deployment:
+MPESA_CALLBACK_URL=https://YOUR-RENDER-URL.onrender.com/api/pay/callback
+FRONTEND_URL=http://localhost:3000
+──────────────────────────────────────────
+Press Ctrl+S to save
+
+─── 4B. Get Gmail App Password ────────────────────────────────
+1. Go to myaccount.google.com
+2. Click "Security" in the left sidebar
+3. Find "2-Step Verification" → turn it ON if not already on
+4. Search for "App passwords" in the search bar at the top
+5. Click App passwords
+6. Under "Select app" choose: Mail
+7. Under "Select device" choose: Windows Computer
+8. Click Generate
+9. A popup shows 16 characters like: abcd efgh ijkl mnop
+10. COPY it (without spaces)
+11. Paste it as EMAIL_PASS in your .env file
+
+─── 4C. Get Daraja M-Pesa Keys ────────────────────────────────
+1. Go to developer.safaricom.co.ke
+2. Create account → verify email → log in
+3. Click "My Apps" → "Create New App"
+4. Name: VibeOrbit → check "M-Pesa Sandbox" → Create
+5. Click your app → copy Consumer Key and Consumer Secret
+6. Click APIs → M-Pesa Sandbox → Go to Sandbox
+7. Copy the Shortcode and Passkey
+8. Paste all 4 values in your .env file
+
+─── 4D. Frontend .env.local file ──────────────────────────────
+1. In VS Code, expand the "frontend" folder
+2. You see ".env.local.example"
+3. Right-click → Copy → Paste in the same folder
+4. Rename the copy to: .env.local
+5. Open .env.local
+6. It should say:
+   NEXT_PUBLIC_API_URL=http://localhost:5000/api
+7. Leave it as is for now (you'll update it after deployment)
+8. Press Ctrl+S
+
+═══════════════════════════════════════════════════════════════
+ STEP 5 — SET UP THE DATABASE TABLES
+═══════════════════════════════════════════════════════════════
+
+1. Open your browser → go to neon.tech → log in
+2. Click on your "vibeorbit" project
+3. Click "SQL Editor" in the LEFT sidebar
+4. Open VS Code → find "database/schema.sql"
+5. Press Ctrl+A to select ALL the SQL text
+6. Press Ctrl+C to copy it
+7. Switch to Neon in browser → click inside the SQL editor box
+8. Press Ctrl+V to paste
+9. Click the "Run" button (blue, top right of SQL editor)
+10. Wait 5 seconds
+11. You should see: Success + a list of 7 table names
+    (users, artists, songs, playlists, playlist_songs, listening_history, subscriptions)
+
+If you see an error, check that you copied ALL the text from schema.sql
+
+═══════════════════════════════════════════════════════════════
+ STEP 6 — INSTALL PACKAGES AND TEST LOCALLY
+═══════════════════════════════════════════════════════════════
+
+─── 6A. Install Backend Packages ──────────────────────────────
+In VS Code terminal:
+   cd backend
+   npm install
+
+Wait for it to finish (1-2 minutes). You'll see "added XXX packages"
+
+─── 6B. Install Frontend Packages ─────────────────────────────
+Open a NEW terminal tab (click the + button in terminal):
+   cd frontend
+   npm install
+
+Wait for it (2-3 minutes).
+
+─── 6C. Start the Backend ─────────────────────────────────────
+In the backend terminal:
+   npm run dev
+
+You should see:
+  🚀 VibeOrbit backend running on port 5000
+  ✅ Connected to Neon database
+
+If you see "Connected to Neon" → backend is working!
+
+─── 6D. Start the Frontend ────────────────────────────────────
+In the frontend terminal:
+   npm run dev
+
+You should see:
+  ▲ Next.js 14.0.3
+  Local: http://localhost:3000
+
+Open your browser → go to: http://localhost:3000
+You should see the VibeOrbit homepage!
+
+─── 6E. Test the app locally ──────────────────────────────────
+1. Click "Sign up" → create a test account
+2. Log in with that account
+3. Go to Upload → upload an MP3 file
+4. Go to Home → you should see your song
+5. Click the song → player bar appears at the bottom
+6. Click play → music should play!
+7. Go to Library → create a playlist
+8. Go to Search → search for the song you uploaded
+
+═══════════════════════════════════════════════════════════════
+ STEP 7 — PUSH CODE TO GITHUB
+═══════════════════════════════════════════════════════════════
+
+─── 7A. Create GitHub Repository ──────────────────────────────
+1. Go to github.com → log in
+2. Click the "+" icon in the top right corner
+3. Click "New repository"
+4. Repository name: vibeorbit
+5. Leave it Public
+6. DO NOT check "Initialize with README" (you already have one)
+7. Click "Create repository"
+8. On the next page, COPY your repository URL:
+   It looks like: https://github.com/YOURNAME/vibeorbit.git
+
+─── 7B. Get Personal Access Token ────────────────────────────
+(GitHub now requires this instead of your password)
+1. On GitHub, click your profile picture → Settings
+2. Scroll to the very bottom → click "Developer settings"
+3. Click "Personal access tokens" → "Tokens (classic)"
+4. Click "Generate new token (classic)"
+5. Note: vibeorbit
+6. Expiration: No expiration
+7. Check the "repo" checkbox (first one under Select scopes)
+8. Click "Generate token" at the bottom
+9. COPY the token immediately — you cannot see it again!
+   Looks like: ghp_xxxxxxxxxxxxxxxxxxxx
+10. Save it in Notepad
+
+─── 7C. Push Your Code ────────────────────────────────────────
+In VS Code terminal (in the root vibeorbit folder, not backend or frontend):
+If you're in backend/ type: cd ..
+If you're in frontend/ type: cd ..
+
+Then run these one by one:
+   git add .
+   git commit -m "Initial VibeOrbit project"
+   git branch -M main
+   git remote add origin https://github.com/YOURNAME/vibeorbit.git
+   git push -u origin main
+
+When asked for password → paste your Personal Access Token
+
+─── 7D. Verify on GitHub ──────────────────────────────────────
+Go to github.com/YOURNAME/vibeorbit
+You should see all your files: backend/, frontend/, database/, etc.
+
+═══════════════════════════════════════════════════════════════
+ STEP 8 — DEPLOY BACKEND TO RENDER
+═══════════════════════════════════════════════════════════════
+
+1. Go to render.com → log in
+2. Click "New +" button (top right)
+3. Click "Web Service"
+4. Click "Connect a repository"
+5. Find and click "vibeorbit" in the list
+6. If you don't see it, click "Configure account" → authorize Render
+
+── Fill in the form: ──────────────────────────────────────────
+Name:             vibeorbit-backend
+Region:           Frankfurt (EU Central) ← closest to Kenya
+Branch:           main
+Root Directory:   backend          ← IMPORTANT: type "backend"
+Runtime:          Node
+Build Command:    npm install
+Start Command:    npm start
+Instance Type:    Free
+──────────────────────────────────────────────────────────────
+
+7. Scroll DOWN — you see "Environment Variables" section
+8. Click "Add Environment Variable" for EACH variable:
+   Click Add → type the Key → type the Value → click Add again
+
+   Add these one by one:
+   ┌─────────────────────────┬──────────────────────────────────┐
+   │ KEY                     │ VALUE                            │
+   ├─────────────────────────┼──────────────────────────────────┤
+   │ DATABASE_URL            │ your Neon connection string      │
+   │ JWT_SECRET              │ VibeOrbit2024ChangeThis          │
+   │ CLOUDINARY_CLOUD_NAME   │ your cloud name                  │
+   │ CLOUDINARY_API_KEY      │ your api key                     │
+   │ CLOUDINARY_API_SECRET   │ your api secret                  │
+   │ EMAIL_USER              │ your gmail                       │
+   │ EMAIL_PASS              │ your app password                │
+   │ MPESA_CONSUMER_KEY      │ your key                         │
+   │ MPESA_CONSUMER_SECRET   │ your secret                      │
+   │ MPESA_SHORTCODE         │ 174379                           │
+   │ MPESA_PASSKEY           │ your passkey                     │
+   │ FRONTEND_URL            │ http://localhost:3000 (for now)  │
+   │ MPESA_CALLBACK_URL      │ http://localhost:3000 (for now)  │
+   └─────────────────────────┴──────────────────────────────────┘
+
+9. Click "Create Web Service" at the bottom
+10. Render starts building — watch the logs
+11. When you see "Your service is live" → look for the URL at top:
+    It looks like: https://vibeorbit-backend-xxxx.onrender.com
+12. COPY this URL — you need it for the next steps
+
+─── Test your backend is live ─────────────────────────────────
+Open your browser → go to your Render URL
+You should see: {"message":"🎵 VibeOrbit API is running"}
+If you see that → backend is deployed successfully!
+
+═══════════════════════════════════════════════════════════════
+ STEP 9 — UPDATE URLS AFTER BACKEND DEPLOYMENT
+═══════════════════════════════════════════════════════════════
+
+─── 9A. Update Render Environment Variables ───────────────────
+Now that you have your backend URL, update these 2 variables:
+1. Go to Render → click your vibeorbit-backend service
+2. Click "Environment" in the left menu
+3. Find MPESA_CALLBACK_URL → click the pencil icon → update to:
+   https://YOUR-RENDER-URL.onrender.com/api/pay/callback
+4. Find FRONTEND_URL → you'll update this after Netlify deployment
+5. Click "Save Changes"
+
+═══════════════════════════════════════════════════════════════
+ STEP 10 — DEPLOY FRONTEND TO NETLIFY
+═══════════════════════════════════════════════════════════════
+
+1. Go to netlify.com → log in
+2. You see the dashboard with "No sites yet" or your site list
+3. Click "Add new site" button
+4. Click "Import an existing project"
+5. Click "Deploy with GitHub"
+6. A popup appears → click "Authorize netlify" if asked
+7. You see a list of your GitHub repositories
+8. Find and click "vibeorbit"
+
+── Fill in the settings: ─────────────────────────────────────
+Team:           your name (default)
+Branch:         main
+Base directory: frontend          ← IMPORTANT: type "frontend"
+Build command:  npm run build     ← should auto-fill
+Publish directory: .next          ← type this exactly
+──────────────────────────────────────────────────────────────
+
+9. Scroll down → click "Add environment variables"
+10. Click "New variable" and add:
+
+   Key:   NEXT_PUBLIC_API_URL
+   Value: https://YOUR-RENDER-URL.onrender.com/api
+   (use your actual Render URL from Step 8)
+
+11. Click "Deploy vibeorbit"
+12. Netlify starts building — you see a progress log
+13. Wait 3-5 minutes
+14. When done you see: "Site is live!"
+15. At the top you see a URL like: https://amazing-vibeorbit-123.netlify.app
+16. COPY this URL
+
+─── Test your live site ───────────────────────────────────────
+Open the Netlify URL in your browser
+You should see the VibeOrbit homepage!
+Try creating an account → it should work!
+
+═══════════════════════════════════════════════════════════════
+ STEP 11 — UPDATE ALL URLS WITH LIVE DOMAINS
+═══════════════════════════════════════════════════════════════
+
+Now update everything with the real URLs:
+
+─── 11A. Update Render (Backend) ──────────────────────────────
+1. Go to render.com → your vibeorbit-backend service
+2. Click "Environment" in the left sidebar
+3. Update FRONTEND_URL:
+   Old: http://localhost:3000
+   New: https://your-site-name.netlify.app
+4. Click "Save Changes" → Render will restart automatically
+
+─── 11B. Update Netlify (Frontend) ────────────────────────────
+NEXT_PUBLIC_API_URL should already be correct from Step 10.
+If you need to change it:
+1. Go to netlify.com → click your site
+2. Click "Site configuration" in the top menu
+3. Click "Environment variables" in the left sidebar
+4. Find NEXT_PUBLIC_API_URL → click "Edit"
+5. Update the value if needed → click "Save"
+6. Go back to "Deploys" → click "Trigger deploy" → "Deploy site"
+
+═══════════════════════════════════════════════════════════════
+ STEP 12 — CHANGE NETLIFY SITE NAME (Optional but nice)
+═══════════════════════════════════════════════════════════════
+
+1. Go to netlify.com → click your site
+2. Click "Site configuration" (top menu)
+3. Click "Change site name"
+4. Type: vibeorbit (or vibeorbit-app)
+5. Click Save
+6. Your URL is now: https://vibeorbit.netlify.app
+
+═══════════════════════════════════════════════════════════════
+ STEP 13 — FINAL TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+Open your live Netlify URL and test every feature:
+
+[ ] 1. Visit /signup → create a new account
+[ ] 2. Check email (if Gmail settings are wrong, fix EMAIL_PASS)
+[ ] 3. Log in with your account
+[ ] 4. Go to /upload → upload an MP3 file
+[ ] 5. Go to / (home) → see your uploaded song
+[ ] 6. Click the song → player bar appears at bottom
+[ ] 7. Click play → music streams!
+[ ] 8. Go to /search → search for your song
+[ ] 9. Go to /library → create a playlist
+[  ] 10. Go to /profile → try M-Pesa subscription
+[ ] 11. Go to /forgot-password → enter email → check inbox for reset link
+[ ] 12. Click reset link → set new password → log in
+
+═══════════════════════════════════════════════════════════════
+ STEP 14 — HOW TO SAVE CHANGES (Git Workflow)
+═══════════════════════════════════════════════════════════════
+
+Every time you make changes to your code:
+
+1. In VS Code terminal (at root vibeorbit/ folder):
+   git add .
+   git commit -m "describe what you changed"
+   git push
+
+2. Render will automatically redeploy your backend
+3. Netlify will automatically redeploy your frontend
+
+═══════════════════════════════════════════════════════════════
+ TROUBLESHOOTING COMMON PROBLEMS
+═══════════════════════════════════════════════════════════════
+
+PROBLEM: "Cannot connect to database"
+FIX: Check your DATABASE_URL in Render environment variables.
+     Make sure it's the full string from Neon including ?sslmode=require
+
+PROBLEM: "Upload failed"
+FIX: Check CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+     Make sure there are no spaces or extra characters
+
+PROBLEM: "Reset email not sending"
+FIX: Check EMAIL_USER and EMAIL_PASS in Render env variables
+     Make sure EMAIL_PASS is the 16-char App Password from Gmail
+     (NOT your Gmail account password)
+
+PROBLEM: Frontend shows "Network Error"
+FIX: Check NEXT_PUBLIC_API_URL in Netlify env variables
+     It must end with /api
+     Example: https://vibeorbit-backend.onrender.com/api
+
+PROBLEM: Backend on Render takes 30+ seconds to respond
+FIX: This is normal on the free plan — Render "sleeps" after 15 min
+     The first request wakes it up. Upgrade to paid for always-on.
+
+PROBLEM: M-Pesa payment fails
+FIX: Make sure you're using sandbox credentials from Daraja
+     Test phone numbers from sandbox are in the Daraja dashboard
+
+═══════════════════════════════════════════════════════════════
+ YOUR LIVE APP URLS (fill these in after deployment)
+═══════════════════════════════════════════════════════════════
+
+Frontend (Netlify):  https://_________________________.netlify.app
+Backend  (Render):   https://_________________________.onrender.com
+Database (Neon):     neon.tech → vibeorbit project
+
+═══════════════════════════════════════════════════════════════
+ CONGRATULATIONS! VibeOrbit is live! 🎉
+═══════════════════════════════════════════════════════════════
