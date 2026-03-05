@@ -48,6 +48,10 @@ export default function ProfilePage() {
 
   if (loading) return <div className="flex justify-center pt-20"><div className="spinner" /></div>;
 
+  const joinedDate = (user as any)?.created_at
+    ? new Date((user as any).created_at).toLocaleDateString()
+    : '—';
+
   return (
     <div className="max-w-2xl">
       <h1 className="text-3xl font-black mb-8">Profile</h1>
@@ -55,8 +59,8 @@ export default function ProfilePage() {
       {/* User card */}
       <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 mb-8 flex items-center gap-5">
         <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center shrink-0 overflow-hidden">
-          {user?.avatar_url
-            ? <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+          {(user as any)?.avatar_url
+            ? <img src={(user as any).avatar_url} alt="" className="w-full h-full object-cover" />
             : <User size={28} className="text-white/30" />
           }
         </div>
@@ -71,7 +75,7 @@ export default function ProfilePage() {
           </div>
           <p className="text-white/40 text-sm">{user?.email}</p>
           <p className="text-white/20 text-xs mt-1">
-            Joined {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+            Joined {joinedDate}
           </p>
         </div>
       </div>
