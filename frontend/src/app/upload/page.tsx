@@ -1,157 +1,195 @@
 'use client';
 import { useState, useRef } from 'react';
-import { Upload, Music2, CheckCircle } from 'lucide-react';
+import { Upload, Music2, CheckCircle, X, Plus } from 'lucide-react';
 import api from '@/lib/api';
 
-const GENRES = ['Pop','Hip-Hop','R&B','Afrobeats','Bongo Flava','Gospel','Jazz','Rock','Electronic','Classical','Reggae','Country','Other'];
+const GENRES = ['Pop','Hip-Hop','R&B','Afrobeats','Bongo Flava','Gospel','Jazz',
+                'Rock','Electronic','Classical','Reggae','Country','Other'];
+
+interface SongEntry {
+  id:         string;
+  file:       File;
+  title:      string;
+  artistName: string;
+  genre:      string;
+  duration:   string;
+  status:     'pending' | 'uploading' | 'done' | 'error';
+  progress:   number;
+  error:      string;
+}
 
 export default function UploadPage() {
-  const [title,      setTitle]      = useState('');
-  const [artistName, setArtistName] = useState('');
-  const [genre,      setGenre]      = useState('');
-  const [duration,   setDuration]   = useState('');
-  const [file,       setFile]       = useState<File | null>(null);
-  const [uploading,  setUploading]  = useState(false);
-  const [progress,   setProgress]   = useState(0);
-  const [success,    setSuccess]    = useState(false);
-  const [error,      setError]      = useState('');
+  const [songs,   setSongs]   = useState<SongEntry[]>([]);
+  const [allDone, setAllDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (!f.type.startsWith('audio/')) {
-      setError('Please select an audio file (MP3, WAV, etc.)');
-      return;
-    }
-    setFile(f);
-    setError('');
-    // Auto-fill duration
-    const audio = new Audio(URL.createObjectURL(f));
-    audio.onloadedmetadata = () => setDuration(String(Math.round(audio.duration)));
+  const handleFiles = (files: FileList | null) => {
+    if (!files) return;
+    const newEntries: SongEntry[] = Array.from(files)
+      .filter(f => f.type.startsWith('audio/'))
+      .map(f => ({
+        id:         Math.random().toString(36).slice(2),
+        file:       f,
+        title:      f.name.replace(/\.[^.]+$/, ''),
+        artistName: '',
+        genre:      '',
+        duration:   '',
+        status:     'pending',
+        progress:   0,
+        error:      '',
+      }));
+    setSongs(prev => [...prev, ...newEntries]);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) return setError('Please select an audio file');
-    if (!title.trim()) return setError('Song title is required');
+  const update = (id: string, patch: Partial<SongEntry>) =>
+    setSongs(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
 
-    setError('');
-    setUploading(true);
-    setProgress(0);
+  const remove = (id: string) =>
+    setSongs(prev => prev.filter(s => s.id !== id));
 
-    const formData = new FormData();
-    formData.append('audio', file);
-    formData.append('title', title.trim());
-    formData.append('artistName', artistName.trim());
-    formData.append('genre', genre);
-    formData.append('duration', duration);
-
+  const uploadOne = async (song: SongEntry) => {
+    update(song.id, { status: 'uploading', progress: 0, error: '' });
+    const fd = new FormData();
+    fd.append('audio',      song.file);
+    fd.append('title',      song.title.trim() || song.file.name);
+    fd.append('artistName', song.artistName.trim());
+    fd.append('genre',      song.genre);
+    fd.append('duration',   song.duration);
     try {
-      await api.post('/songs/upload', formData, {
+      await api.post('/songs/upload', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (e) => {
           const pct = Math.round(((e.loaded || 0) * 100) / (e.total || 1));
-          setProgress(pct);
+          update(song.id, { progress: pct });
         },
       });
-
-      setSuccess(true);
-      setTitle(''); setArtistName(''); setGenre(''); setDuration(''); setFile(null);
-      if (inputRef.current) inputRef.current.value = '';
-      setTimeout(() => setSuccess(false), 4000);
+      update(song.id, { status: 'done', progress: 100 });
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Upload failed. Please try again.');
-    } finally {
-      setUploading(false);
-      setProgress(0);
+      update(song.id, {
+        status: 'error',
+        error: err.response?.data?.error || 'Upload failed. Try again.',
+      });
     }
   };
 
+  const uploadAll = async () => {
+    const pending = songs.filter(s => s.status === 'pending' || s.status === 'error');
+    if (!pending.length) return;
+    setAllDone(false);
+    for (const s of pending) await uploadOne(s);
+    setAllDone(true);
+  };
+
+  const pendingCount = songs.filter(s => s.status === 'pending' || s.status === 'error').length;
+
   return (
-    <div className="max-w-lg">
-      <h1 className="text-3xl font-black mb-2">Upload Song</h1>
-      <p className="text-white/40 text-sm mb-8">
-        Share your music with the world. Supports MP3, WAV, OGG, M4A.
+    <div className="max-w-2xl mx-auto">
+      <h1 className="text-2xl md:text-3xl font-black mb-2">Upload Songs</h1>
+      <p className="text-white/40 text-sm mb-6">
+        Upload multiple songs at once. Supports MP3, WAV, OGG, M4A.
       </p>
 
-      {success && (
-        <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/20 text-green-400 px-4 py-4 rounded-xl mb-6">
-          <CheckCircle size={18} />
-          <div>
-            <p className="font-semibold text-sm">Upload successful!</p>
-            <p className="text-xs opacity-70">Your song is now available to stream.</p>
-          </div>
+      {/* Drop zone */}
+      <div
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+        className="border-2 border-dashed border-white/15 hover:border-white/30 rounded-2xl p-8 text-center cursor-pointer transition-colors mb-6"
+      >
+        <input ref={inputRef} type="file" accept="audio/*" multiple
+          onChange={(e) => handleFiles(e.target.files)} className="hidden" />
+        <Upload size={32} className="mx-auto mb-2 text-white/20" />
+        <p className="font-semibold text-sm text-white/60">
+          Click or drag & drop audio files here
+        </p>
+        <p className="text-xs text-white/25 mt-1">
+          You can select multiple files at once
+        </p>
+      </div>
+
+      {/* Song list */}
+      {songs.length > 0 && (
+        <div className="space-y-3 mb-6">
+          {songs.map((song) => (
+            <div key={song.id}
+              className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <Music2 size={18} className="text-white/30 mt-1 shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <input type="text" placeholder="Song title"
+                    value={song.title}
+                    onChange={(e) => update(song.id, { title: e.target.value })}
+                    disabled={song.status === 'uploading' || song.status === 'done'}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" placeholder="Artist name"
+                      value={song.artistName}
+                      onChange={(e) => update(song.id, { artistName: e.target.value })}
+                      disabled={song.status === 'uploading' || song.status === 'done'}
+                    />
+                    <select value={song.genre}
+                      onChange={(e) => update(song.id, { genre: e.target.value })}
+                      disabled={song.status === 'uploading' || song.status === 'done'}>
+                      <option value="">Genre</option>
+                      {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Progress bar */}
+                  {song.status === 'uploading' && (
+                    <div>
+                      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-white rounded-full transition-all"
+                          style={{ width: `${song.progress}%` }} />
+                      </div>
+                      <p className="text-xs text-white/30 mt-1">Uploading {song.progress}%...</p>
+                    </div>
+                  )}
+
+                  {song.status === 'done' && (
+                    <p className="text-xs text-green-400 flex items-center gap-1">
+                      <CheckCircle size={13} /> Uploaded successfully
+                    </p>
+                  )}
+
+                  {song.status === 'error' && (
+                    <p className="text-xs text-red-400">{song.error}</p>
+                  )}
+                </div>
+
+                {song.status !== 'uploading' && song.status !== 'done' && (
+                  <button onClick={() => remove(song.id)}
+                    className="text-white/20 hover:text-red-400 transition-colors shrink-0">
+                    <X size={16} />
+                  </button>
+                )}
+                {song.status === 'done' && (
+                  <CheckCircle size={18} className="text-green-400 shrink-0" />
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* File drop area */}
-        <div
-          onClick={() => inputRef.current?.click()}
-          className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors ${
-            file ? 'border-white/30 bg-white/[0.04]' : 'border-white/10 hover:border-white/20'
-          }`}
-        >
-          <input ref={inputRef} type="file" accept="audio/*" onChange={handleFileChange} className="hidden" />
-          {file ? (
-            <div>
-              <Music2 size={32} className="mx-auto mb-2 text-white/60" />
-              <p className="font-semibold text-sm">{file.name}</p>
-              <p className="text-xs text-white/40 mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-            </div>
-          ) : (
-            <div>
-              <Upload size={32} className="mx-auto mb-2 text-white/20" />
-              <p className="font-medium text-sm">Click to select audio file</p>
-              <p className="text-xs text-white/30 mt-1">MP3, WAV, OGG, M4A — max 100MB</p>
-            </div>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs text-white/40 mb-1.5 font-medium">Song Title *</label>
-          <input type="text" placeholder="My Amazing Song" value={title}
-            onChange={(e) => setTitle(e.target.value)} required />
-        </div>
-
-        <div>
-          <label className="block text-xs text-white/40 mb-1.5 font-medium">Artist Name</label>
-          <input type="text" placeholder="Artist or band name" value={artistName}
-            onChange={(e) => setArtistName(e.target.value)} />
-        </div>
-
-        <div>
-          <label className="block text-xs text-white/40 mb-1.5 font-medium">Genre</label>
-          <select value={genre} onChange={(e) => setGenre(e.target.value)}>
-            <option value="">Select genre (optional)</option>
-            {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
-          </select>
-        </div>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3 rounded-lg">
-            {error}
-          </div>
-        )}
-
-        {uploading && (
-          <div>
-            <div className="flex justify-between text-xs text-white/40 mb-1.5">
-              <span>Uploading to cloud...</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-              <div className="h-full bg-white rounded-full transition-all duration-300"
-                style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-        )}
-
-        <button type="submit" disabled={uploading || !file} className="btn-primary">
-          {uploading ? `Uploading ${progress}%...` : 'Upload Song'}
+      {/* Buttons */}
+      <div className="flex gap-3">
+        <button onClick={() => inputRef.current?.click()}
+          className="btn-ghost text-sm flex items-center gap-2" style={{ width: 'auto', padding: '11px 20px' }}>
+          <Plus size={16} /> Add More
         </button>
-      </form>
+        {pendingCount > 0 && (
+          <button onClick={uploadAll} className="btn-primary" style={{ flex: 1 }}>
+            Upload {pendingCount} Song{pendingCount !== 1 ? 's' : ''}
+          </button>
+        )}
+      </div>
+
+      {allDone && songs.every(s => s.status === 'done') && (
+        <div className="mt-4 bg-green-500/10 border border-green-500/20 text-green-400 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+          <CheckCircle size={16} /> All songs uploaded! Go to Home to see them.
+        </div>
+      )}
     </div>
   );
 }
