@@ -1,21 +1,31 @@
 'use client';
 import './globals.css';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import Sidebar   from '@/components/Sidebar';
 import PlayerBar from '@/components/PlayerBar';
+import { useAuthStore } from '@/store/authStore';
 
-// Pages that should NOT show the sidebar/player (auth pages)
 const AUTH_PAGES = ['/login', '/signup', '/forgot-password', '/reset-password'];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));
+  const pathname        = usePathname();
+  const router          = useRouter();
+  const { isAuthenticated } = useAuthStore();
+  const isAuthPage      = AUTH_PAGES.some((p) => pathname.startsWith(p));
+
+  // Redirect to login if not authenticated and not on auth page
+  useEffect(() => {
+    if (!isAuthPage && !isAuthenticated()) {
+      router.replace('/login');
+    }
+  }, [pathname]);
 
   return (
     <html lang="en">
       <head>
         <title>VibeOrbit — Music. Your way.</title>
-        <meta name="description" content="Stream music, create playlists, discover new artists on VibeOrbit." />
+        <meta name="description" content="Stream music, create playlists, discover new artists." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -26,12 +36,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-black text-white">
         {isAuthPage ? (
-          /* Auth pages: centered, no sidebar */
           <main className="min-h-screen flex items-center justify-center bg-black px-4">
             {children}
           </main>
         ) : (
-          /* App pages: sidebar + scrollable content */
           <>
             <div className="flex h-screen overflow-hidden">
               <Sidebar />
@@ -48,3 +56,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
+

@@ -1,10 +1,10 @@
 'use client';
-import { useState }   from 'react';
-import Link            from 'next/link';
-import { useRouter }   from 'next/navigation';
-import api             from '@/lib/api';
+import { useState }    from 'react';
+import Link             from 'next/link';
+import { useRouter }    from 'next/navigation';
+import api              from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { Music2 }      from 'lucide-react';
+import { Music2 }       from 'lucide-react';
 
 export default function SignupPage() {
   const [email,    setEmail]    = useState('');
@@ -12,24 +12,24 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
-
   const { setAuth } = useAuthStore();
   const router      = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (password.length < 6) {
-      return setError('Password must be at least 6 characters');
-    }
+    if (password.length < 6) return setError('Password must be at least 6 characters');
     setLoading(true);
-
     try {
       const { data } = await api.post('/auth/register', { email, username, password });
       setAuth(data.token, data.user);
       router.push('/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed. Please try again.');
+      if (!err.response) {
+        setError('Cannot reach server. Check your internet or try again in 30 seconds.');
+      } else {
+        setError(err.response?.data?.error || 'Registration failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -37,7 +37,6 @@ export default function SignupPage() {
 
   return (
     <div className="w-full max-w-sm">
-      {/* Logo */}
       <div className="flex items-center gap-2 mb-8">
         <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center">
           <Music2 size={18} className="text-black" />
@@ -57,25 +56,21 @@ export default function SignupPage() {
             {error}
           </div>
         )}
-
         <div>
           <label className="block text-xs text-white/40 mb-1.5 font-medium">Email</label>
           <input type="email" placeholder="you@example.com" value={email}
             onChange={(e) => setEmail(e.target.value)} required />
         </div>
-
         <div>
           <label className="block text-xs text-white/40 mb-1.5 font-medium">Username</label>
           <input type="text" placeholder="cooluser123" value={username}
             onChange={(e) => setUsername(e.target.value)} required minLength={3} />
         </div>
-
         <div>
           <label className="block text-xs text-white/40 mb-1.5 font-medium">Password</label>
           <input type="password" placeholder="Min. 6 characters" value={password}
             onChange={(e) => setPassword(e.target.value)} required minLength={6} />
         </div>
-
         <button type="submit" disabled={loading} className="btn-primary">
           {loading ? 'Creating account...' : 'Create Account'}
         </button>

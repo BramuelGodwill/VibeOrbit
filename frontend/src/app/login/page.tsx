@@ -1,17 +1,16 @@
 'use client';
-import { useState } from 'react';
-import Link         from 'next/link';
-import { useRouter } from 'next/navigation';
-import api           from '@/lib/api';
+import { useState }    from 'react';
+import Link             from 'next/link';
+import { useRouter }    from 'next/navigation';
+import api              from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { Music2 }    from 'lucide-react';
+import { Music2 }       from 'lucide-react';
 
 export default function LoginPage() {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
-
   const { setAuth } = useAuthStore();
   const router      = useRouter();
 
@@ -19,13 +18,16 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       const { data } = await api.post('/auth/login', { email, password });
       setAuth(data.token, data.user);
       router.push('/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
+      if (!err.response) {
+        setError('Cannot reach server. Check your internet or try again in 30 seconds.');
+      } else {
+        setError(err.response?.data?.error || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -33,7 +35,6 @@ export default function LoginPage() {
 
   return (
     <div className="w-full max-w-sm">
-      {/* Logo */}
       <div className="flex items-center gap-2 mb-8">
         <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center">
           <Music2 size={18} className="text-black" />
@@ -53,7 +54,6 @@ export default function LoginPage() {
             {error}
           </div>
         )}
-
         <div>
           <label className="block text-xs text-white/40 mb-1.5 font-medium">Email</label>
           <input
@@ -64,7 +64,6 @@ export default function LoginPage() {
             required
           />
         </div>
-
         <div>
           <label className="block text-xs text-white/40 mb-1.5 font-medium">Password</label>
           <input
@@ -75,14 +74,14 @@ export default function LoginPage() {
             required
           />
         </div>
-
         <button type="submit" disabled={loading} className="btn-primary">
-          {loading ? <><span className="spinner" style={{ width: 16, height: 16 }} />Signing in...</> : 'Sign In'}
+          {loading ? 'Signing in...' : 'Sign In'}
         </button>
       </form>
 
       <div className="mt-6 space-y-3 text-center">
-        <Link href="/forgot-password" className="block text-sm text-white/30 hover:text-white transition-colors">
+        <Link href="/forgot-password"
+          className="block text-sm text-white/30 hover:text-white transition-colors">
           Forgot your password?
         </Link>
         <p className="text-sm text-white/40">
