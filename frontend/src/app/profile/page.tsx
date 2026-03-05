@@ -56,7 +56,7 @@ export default function ProfilePage() {
     if (!phone || phone.length < 9) return setPayError('Enter a valid phone number');
     setPaying(true);
     try {
-      const { data } = await api.post('/pay/mpesa', { phone, amount: 500 });
+      const { data } = await api.post('/pay/mpesa', { phone, amount: 10 });
       setPayMsg(data.message);
       setPhone('');
     } catch (err: any) {
@@ -124,13 +124,13 @@ export default function ProfilePage() {
             <Crown size={16} />
             <h3 className="font-bold">Go Premium</h3>
           </div>
-          <p className="text-white/40 text-sm mb-4">KES 500/month — Unlimited streaming</p>
+          <p className="text-white/40 text-sm mb-4">KES 10/week — Unlimited streaming</p>
           <form onSubmit={handlePay} className="flex gap-2 flex-col sm:flex-row">
             <input type="tel" placeholder="Phone e.g. 0793776178"
               value={phone} onChange={(e) => setPhone(e.target.value)} required />
             <button type="submit" disabled={paying}
               className="btn-primary sm:w-auto sm:px-5 whitespace-nowrap">
-              {paying ? 'Sending...' : 'Pay KES 500'}
+              {paying ? 'Sending...' : 'Pay KES 10'}
             </button>
           </form>
           {payMsg   && <p className="mt-3 text-sm text-green-400 bg-green-500/10 px-4 py-3 rounded-xl">{payMsg}</p>}

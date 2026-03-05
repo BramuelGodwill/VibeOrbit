@@ -22,6 +22,15 @@ interface SongEntry {
   error:      string;
 }
 
+// Convert file to base64 string
+const toBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
 export default function UploadPage() {
   const [songs,   setSongs]   = useState<SongEntry[]>([]);
   const [allDone, setAllDone] = useState(false);
@@ -34,9 +43,8 @@ export default function UploadPage() {
       .map(f => {
         // Auto-detect duration
         const audio = new Audio(URL.createObjectURL(f));
-        let dur = '';
         audio.onloadedmetadata = () => {
-          dur = String(Math.round(audio.duration));
+          const dur = String(Math.round(audio.duration));
           setSongs(prev => prev.map(s =>
             s.file === f ? { ...s, duration: dur } : s
           ));
@@ -66,21 +74,31 @@ export default function UploadPage() {
 
   const handleCoverChange = (id: string, file: File | null) => {
     if (!file) return;
+    // Show preview immediately
     const url = URL.createObjectURL(file);
     update(id, { coverFile: file, coverUrl: url });
   };
 
   const uploadOne = async (song: SongEntry) => {
     update(song.id, { status: 'uploading', progress: 0, error: '' });
+
     const fd = new FormData();
     fd.append('audio',      song.file);
     fd.append('title',      song.title.trim() || song.file.name);
     fd.append('artistName', song.artistName.trim());
     fd.append('genre',      song.genre);
     fd.append('duration',   song.duration);
+
+    // Convert cover image to base64 so backend can upload it to Cloudinary
     if (song.coverFile) {
-      fd.append('cover', song.coverFile);
+      try {
+        const base64 = await toBase64(song.coverFile);
+        fd.append('cover_base64', base64);
+      } catch {
+        console.error('Failed to convert cover to base64');
+      }
     }
+
     try {
       await api.post('/songs/upload', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -144,8 +162,7 @@ export default function UploadPage() {
       {songs.length > 0 && (
         <div className="space-y-4 mb-6">
           {songs.map((song) => {
-            const coverRef = { current: null as HTMLInputElement | null };
-            const isDone     = song.status === 'done';
+            const isDone      = song.status === 'done';
             const isUploading = song.status === 'uploading';
 
             return (
@@ -159,7 +176,7 @@ export default function UploadPage() {
                 }`}>
                 <div className="flex gap-4">
 
-                  {/* Cover image picker */}
+                  {/* ── Cover image picker ── */}
                   <div className="shrink-0">
                     <input
                       type="file"
@@ -171,24 +188,31 @@ export default function UploadPage() {
                     />
                     <label
                       htmlFor={`cover-${song.id}`}
-                      className={`w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center cursor-pointer border border-white/10 hover:border-white/25 transition-all ${
-                        isDone || isUploading ? 'cursor-default' : ''
+                      title="Click to add cover image"
+                      className={`w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center border border-white/10 transition-all ${
+                        isDone || isUploading
+                          ? 'cursor-default opacity-70'
+                          : 'cursor-pointer hover:border-white/30 hover:bg-white/5'
                       }`}
                     >
-                      {song.coverUrl
-                        ? <img src={song.coverUrl} alt="cover"
-                            className="w-full h-full object-cover" />
-                        : (
-                          <div className="bg-white/[0.06] w-full h-full flex flex-col items-center justify-center gap-1">
-                            <Image size={16} className="text-white/20" />
-                            <span className="text-[9px] text-white/20">Cover</span>
-                          </div>
-                        )
-                      }
+                      {song.coverUrl ? (
+                        <img
+                          src={song.coverUrl}
+                          alt="cover"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="bg-white/[0.06] w-full h-full flex flex-col items-center justify-center gap-1">
+                          <Image size={16} className="text-white/20" />
+                          <span className="text-[9px] text-white/20 text-center leading-tight px-1">
+                            Add cover
+                          </span>
+                        </div>
+                      )}
                     </label>
                   </div>
 
-                  {/* Fields */}
+                  {/* ── Input fields ── */}
                   <div className="flex-1 min-w-0 space-y-2">
                     <input
                       type="text"
@@ -215,17 +239,26 @@ export default function UploadPage() {
                       </select>
                     </div>
 
-                    {/* File name small hint */}
+                    {/* File info */}
                     <p className="text-[11px] text-white/20 truncate">
                       📁 {song.file.name} — {(song.file.size / 1024 / 1024).toFixed(1)} MB
                     </p>
+
+                    {/* Cover selected confirmation */}
+                    {song.coverFile && !isDone && !isUploading && (
+                      <p className="text-[11px] text-white/40 flex items-center gap-1">
+                        🖼️ Cover image selected — will upload with song
+                      </p>
+                    )}
 
                     {/* Progress bar */}
                     {isUploading && (
                       <div>
                         <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full bg-white rounded-full transition-all duration-200"
-                            style={{ width: `${song.progress}%` }} />
+                          <div
+                            className="h-full bg-white rounded-full transition-all duration-300"
+                            style={{ width: `${song.progress}%` }}
+                          />
                         </div>
                         <p className="text-xs text-white/30 mt-1">
                           Uploading to cloud... {song.progress}%
@@ -236,7 +269,8 @@ export default function UploadPage() {
                     {/* Success */}
                     {isDone && (
                       <p className="text-xs text-green-400 flex items-center gap-1.5 font-medium">
-                        <CheckCircle size={13} /> Uploaded successfully!
+                        <CheckCircle size={13} />
+                        Uploaded! Cover image saved.
                       </p>
                     )}
 
@@ -246,7 +280,7 @@ export default function UploadPage() {
                     )}
                   </div>
 
-                  {/* Remove button */}
+                  {/* Remove / Done icon */}
                   {!isUploading && !isDone && (
                     <button
                       onClick={() => remove(song.id)}
@@ -258,6 +292,7 @@ export default function UploadPage() {
                   {isDone && (
                     <CheckCircle size={18} className="text-green-400 shrink-0 self-start mt-0.5" />
                   )}
+
                 </div>
               </div>
             );
@@ -290,15 +325,17 @@ export default function UploadPage() {
         <div className="mt-5 bg-green-500/10 border border-green-500/20 text-green-400 px-4 py-4 rounded-2xl text-sm flex items-center gap-3">
           <CheckCircle size={20} />
           <div>
-            <p className="font-bold">All {doneCount} file{doneCount !== 1 ? 's' : ''} uploaded!</p>
+            <p className="font-bold">
+              All {doneCount} file{doneCount !== 1 ? 's' : ''} uploaded!
+            </p>
             <p className="text-green-400/60 text-xs mt-0.5">
-              Go to Home to see them. They are now live on VibeOrbit.
+              Go to Home to see them with their cover images.
             </p>
           </div>
         </div>
       )}
 
-      {/* ── Empty state hint ── */}
+      {/* ── Empty state ── */}
       {songs.length === 0 && (
         <div className="text-center py-6 text-white/15">
           <Music2 size={32} className="mx-auto mb-2 opacity-40" />
