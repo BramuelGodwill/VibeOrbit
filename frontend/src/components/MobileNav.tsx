@@ -1,14 +1,14 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, Library, Upload, User } from 'lucide-react';
+import { Home, Search, Library, Upload, Settings } from 'lucide-react';
 
 const NAV = [
-  { href: '/',        label: 'Home',    icon: Home    },
-  { href: '/search',  label: 'Search',  icon: Search  },
-  { href: '/library', label: 'Library', icon: Library },
-  { href: '/upload',  label: 'Upload',  icon: Upload  },
-  { href: '/profile', label: 'Profile', icon: User    },
+  { href: '/',         label: 'Home',     icon: Home     },
+  { href: '/search',   label: 'Search',   icon: Search   },
+  { href: '/library',  label: 'Library',  icon: Library  },
+  { href: '/upload',   label: 'Upload',   icon: Upload   },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function MobileNav() {
