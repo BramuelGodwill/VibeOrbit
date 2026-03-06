@@ -48,6 +48,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const current = get().currentSong;
     if (!current || current.id !== song.id) {
       recordPlay(song.id);
+      // Preload next song in queue silently
+    const q    = newQueue ?? get().queue;
+    const idx  = q.findIndex((s) => s.id === song.id);
+    const next = q[idx + 1];
+    if (next && typeof window !== 'undefined') {
+      const preloadAudio   = new Audio();
+      preloadAudio.preload = 'auto';
+      preloadAudio.src     = next.audio_url;
+    }
     }
     set({
       currentSong: song,

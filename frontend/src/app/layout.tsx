@@ -7,6 +7,16 @@ import PlayerBar from '@/components/PlayerBar';
 import MobileNav from '@/components/MobileNav';
 import { useAuthStore } from '@/store/authStore';
 
+// Keep backend awake — ping every 10 minutes
+if (typeof window !== 'undefined') {
+  const ping = () => {
+    fetch((process.env.NEXT_PUBLIC_API_URL || '').replace('/api', '') + '/health')
+      .catch(() => {});
+  };
+  ping();
+  setInterval(ping, 10 * 60 * 1000); // every 10 minutes
+}
+
 const AUTH_PAGES = ['/login', '/signup', '/forgot-password', '/reset-password'];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

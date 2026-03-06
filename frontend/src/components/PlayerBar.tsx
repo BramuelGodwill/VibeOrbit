@@ -34,11 +34,29 @@ export default function PlayerBar() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentSong) return;
-    audio.src  = currentSong.audio_url;
-    audio.loop = loop === 'one';
-    audio.volume = muted ? 0 : volume;
-    if (isPlaying) audio.play().catch(() => {});
+
+    // Set preload to auto so browser buffers immediately
+    audio.preload    = 'auto';
+    audio.src        = currentSong.audio_url;
+    audio.loop       = loop === 'one';
+    audio.volume     = muted ? 0 : volume;
     setLiked(false);
+
+    // Play as soon as enough data is buffered
+    const tryPlay = () => {
+      audio.play().catch(() => {});
+    };
+
+    // If already have enough data, play now
+    if (audio.readyState >= 3) {
+      tryPlay();
+    } else {
+      audio.addEventListener('canplay', tryPlay, { once: true });
+    }
+
+    return () => {
+      audio.removeEventListener('canplay', tryPlay);
+    };
   }, [currentSong]);
 
   useEffect(() => {
@@ -262,6 +280,7 @@ export default function PlayerBar() {
         <div className="bg-black/97 backdrop-blur-xl border-t border-white/[0.06] px-3 py-2"
           style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
           <audio ref={audioRef}
+            preload="auto"
             onTimeUpdate={e => { const a = e.currentTarget; setCurrent(a.currentTime); setDuration(a.duration || 0); }}
             onEnded={handleEnded}
             onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
@@ -303,6 +322,7 @@ export default function PlayerBar() {
         </div>
         <div className="bg-black/97 backdrop-blur-xl border-t border-white/[0.06] px-4 py-3">
           <audio ref={audioRef}
+            preload="auto"
             onTimeUpdate={e => { const a = e.currentTarget; setCurrent(a.currentTime); setDuration(a.duration || 0); }}
             onEnded={handleEnded}
             onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
