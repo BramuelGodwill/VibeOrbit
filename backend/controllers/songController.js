@@ -3,7 +3,7 @@ const pool = require('../config/db');
 // ── UPLOAD SONG ───────────────────────────────────────────────────────────
 exports.uploadSong = async(req, res) => {
     const { title, genre, duration, artistName } = req.body;
-    const audio_url = req.file ? .path;
+    const audio_url = req.file ? req.file.path : null;
     const cover_url = req.coverUrl || req.body.cover_url || null;
 
     if (!audio_url) return res.status(400).json({ error: 'No audio file uploaded' });
