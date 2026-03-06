@@ -2,6 +2,7 @@
 import './globals.css';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/next';
 import Sidebar   from '@/components/Sidebar';
 import PlayerBar from '@/components/PlayerBar';
 import MobileNav from '@/components/MobileNav';
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <PlayerBar />
           </>
         )}
+        <Analytics />
       </body>
     </html>
   );
