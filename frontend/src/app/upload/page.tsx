@@ -142,13 +142,16 @@ export default function UploadPage() {
         className="border-2 border-dashed border-white/15 hover:border-white/30 rounded-2xl p-10 text-center cursor-pointer transition-all hover:bg-white/[0.02] mb-6"
       >
         <input
-          ref={audioInputRef}
-          type="file"
-          accept="audio/*"
-          multiple
-          onChange={(e) => handleFiles(e.target.files)}
-          className="hidden"
-        />
+  ref={audioInputRef}
+  type="file"
+  accept="audio/*"
+  multiple
+  onChange={(e) => {
+    handleFiles(e.target.files);
+    e.target.value = '';
+  }}
+  className="hidden"
+/>
         <Upload size={36} className="mx-auto mb-3 text-white/20" />
         <p className="font-semibold text-white/60 mb-1">
           Click or drag & drop audio files here

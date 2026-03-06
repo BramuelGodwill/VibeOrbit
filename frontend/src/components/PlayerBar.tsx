@@ -53,7 +53,9 @@ export default function PlayerBar() {
   }, [volume, muted]);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.loop = loop === 'one';
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.loop = loop === 'one';
   }, [loop]);
 
   useEffect(() => {
@@ -65,7 +67,12 @@ export default function PlayerBar() {
   }, [currentSong]);
 
   const handleEnded = () => {
-    if (loop === 'one') return; // audio.loop handles it
+    const audio = audioRef.current;
+    if (loop === 'one') {
+      if (audio) { audio.currentTime = 0; audio.play().catch(() => {}); }
+      return;
+    }
+    if (loop === 'all') { playNext(); return; }
     playNext();
   };
 
