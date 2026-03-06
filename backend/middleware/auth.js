@@ -1,7 +1,9 @@
 const jwt = require('jsonwebtoken');
 
+const ADMIN_EMAIL = 'bramuelgodwill7@gmail.com';
+
 // ── Regular auth ──────────────────────────────────────────────────────────
-module.exports = (req, res, next) => {
+const authMiddleware = (req, res, next) => {
     const header = req.headers.authorization;
     if (!header || !header.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'No token provided' });
@@ -10,6 +12,7 @@ module.exports = (req, res, next) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.userId = decoded.userId;
+        req.userEmail = decoded.email;
         next();
     } catch {
         res.status(401).json({ error: 'Invalid or expired token' });
@@ -17,7 +20,7 @@ module.exports = (req, res, next) => {
 };
 
 // ── Admin only ────────────────────────────────────────────────────────────
-module.exports.adminOnly = (req, res, next) => {
+authMiddleware.adminOnly = (req, res, next) => {
     const header = req.headers.authorization;
     if (!header || !header.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'No token provided' });
@@ -26,12 +29,14 @@ module.exports.adminOnly = (req, res, next) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.userId = decoded.userId;
-        const adminEmail = process.env.ADMIN_EMAIL || 'bramuelgodwill@gmail.com';
-        if (decoded.email !== adminEmail) {
-            return res.status(403).json({ error: 'Admin access only. Only the founder can upload songs.' });
+        req.userEmail = decoded.email;
+        if (decoded.email !== ADMIN_EMAIL) {
+            return res.status(403).json({ error: 'Only the founder can do this.' });
         }
         next();
     } catch {
         res.status(401).json({ error: 'Invalid or expired token' });
     }
 };
+
+module.exports = authMiddleware;

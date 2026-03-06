@@ -26,18 +26,23 @@ const handleUpload = (req, res, next) => {
                 });
                 req.coverUrl = result.secure_url;
             } catch (e) {
-                console.error('Cover upload error:', e);
+                console.error('Cover upload error:', e.message);
             }
         }
         next();
     });
 };
 
+// Public routes
 router.get('/', songs.getAllSongs);
 router.get('/trending', songs.getTrending);
 router.get('/search', songs.searchSongs);
+
+// Auth required
 router.get('/recommendations', authMiddleware, songs.getRecommendations);
 router.get('/:id', authMiddleware, songs.getSong);
+
+// Admin only
 router.post('/upload', authMiddleware.adminOnly, handleUpload, songs.uploadSong);
 router.delete('/:id', authMiddleware.adminOnly, songs.deleteSong);
 
