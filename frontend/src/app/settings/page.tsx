@@ -5,8 +5,8 @@ import {
   HelpCircle, LogOut, ChevronRight, Check,
   Lock, Trash2, Mail, Globe
 } from 'lucide-react';
-import { useAuthStore }  from '@/store/authStore';
-import { useRouter }     from 'next/navigation';
+import { useAuthStore } from '@/store/authStore';
+import { useRouter }    from 'next/navigation';
 
 type Theme   = 'dark' | 'light';
 type Quality = 'low' | 'normal' | 'high';
@@ -15,22 +15,26 @@ export default function SettingsPage() {
   const { logout, user } = useAuthStore();
   const router           = useRouter();
 
-  const [theme,        setThemeState]  = useState<Theme>('dark');
-  const [quality,      setQuality]     = useState<Quality>('normal');
-  const [notifications,setNotifications] = useState(true);
-  const [autoPlay,     setAutoPlay]    = useState(true);
-  const [privateProfile, setPrivate]   = useState(false);
-  const [saved,        setSaved]       = useState('');
+  const [theme,          setThemeState]    = useState<Theme>('dark');
+  const [quality,        setQuality]       = useState<Quality>('normal');
+  const [notifications,  setNotifications] = useState(true);
+  const [autoPlay,       setAutoPlay]      = useState(true);
+  const [privateProfile, setPrivate]       = useState(false);
+  const [saved,          setSaved]         = useState('');
+  const [mounted,        setMounted]       = useState(false);
 
-  // Load saved settings
   useEffect(() => {
-    const t = localStorage.getItem('vb_theme')   as Theme   || 'dark';
-    const q = localStorage.getItem('vb_quality') as Quality || 'normal';
-    const n = localStorage.getItem('vb_notifs')  !== 'false';
+    setMounted(true);
+    const t = (localStorage.getItem('vb_theme')   as Theme)   || 'dark';
+    const q = (localStorage.getItem('vb_quality') as Quality) || 'normal';
+    const n = localStorage.getItem('vb_notifs')   !== 'false';
     const a = localStorage.getItem('vb_autoplay') !== 'false';
-    const p = localStorage.getItem('vb_private') === 'true';
-    setThemeState(t); setQuality(q);
-    setNotifications(n); setAutoPlay(a); setPrivate(p);
+    const p = localStorage.getItem('vb_private')  === 'true';
+    setThemeState(t);
+    setQuality(q);
+    setNotifications(n);
+    setAutoPlay(a);
+    setPrivate(p);
     applyTheme(t);
   }, []);
 
@@ -54,16 +58,16 @@ export default function SettingsPage() {
     }
   };
 
+  const flash = (msg: string) => {
+    setSaved(msg);
+    setTimeout(() => setSaved(''), 2000);
+  };
+
   const setTheme = (t: Theme) => {
     setThemeState(t);
     localStorage.setItem('vb_theme', t);
     applyTheme(t);
     flash('Theme updated');
-  };
-
-  const flash = (msg: string) => {
-    setSaved(msg);
-    setTimeout(() => setSaved(''), 2000);
   };
 
   const toggle = (key: string, val: boolean, setter: (v: boolean) => void) => {
@@ -76,6 +80,10 @@ export default function SettingsPage() {
     logout();
     router.push('/login');
   };
+
+  if (!mounted) return (
+    <div className="flex justify-center pt-20"><div className="spinner" /></div>
+  );
 
   return (
     <div className="max-w-lg mx-auto pb-10">
@@ -139,7 +147,8 @@ export default function SettingsPage() {
           <p className="text-sm font-medium mb-3">Streaming Quality</p>
           <div className="space-y-2">
             {(['low', 'normal', 'high'] as Quality[]).map(q => (
-              <button key={q} onClick={() => { setQuality(q); localStorage.setItem('vb_quality', q); flash('Saved'); }}
+              <button key={q}
+                onClick={() => { setQuality(q); localStorage.setItem('vb_quality', q); flash('Saved'); }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all ${
                   quality === q
                     ? 'border-white/30 bg-white/10'
@@ -150,7 +159,9 @@ export default function SettingsPage() {
                   <div className="text-left">
                     <p className="text-sm font-medium capitalize">{q}</p>
                     <p className="text-xs text-white/35">
-                      {q === 'low' ? '~64 kbps — saves data' : q === 'normal' ? '~128 kbps — balanced' : '~320 kbps — best quality'}
+                      {q === 'low'    ? '~64 kbps — saves data'  :
+                       q === 'normal' ? '~128 kbps — balanced'   :
+                                        '~320 kbps — best quality'}
                     </p>
                   </div>
                 </div>
@@ -189,11 +200,12 @@ export default function SettingsPage() {
             <p className="text-xs text-white/40">{user?.email}</p>
           </div>
         </div>
-        <LinkRow icon={<Lock size={16} />} label="Change Password"
+        <LinkRow icon={<Lock size={16} />}   label="Change Password"
           sub="Update your password"
           onClick={() => router.push('/forgot-password')} />
-        <LinkRow icon={<Globe size={16} />} label="Language"
-          sub="English" onClick={() => flash('Coming soon')} />
+        <LinkRow icon={<Globe size={16} />}  label="Language"
+          sub="English"
+          onClick={() => flash('Coming soon')} />
       </Section>
 
       {/* ── SUPPORT ── */}
@@ -201,15 +213,15 @@ export default function SettingsPage() {
         <LinkRow icon={<HelpCircle size={16} />} label="Help Center"
           sub="FAQs and guides"
           onClick={() => window.open('mailto:support@vibeorbit.com')} />
-        <LinkRow icon={<Mail size={16} />} label="Contact Us"
+        <LinkRow icon={<Mail size={16} />}       label="Contact Us"
           sub="support@vibeorbit.com"
           onClick={() => window.open('mailto:support@vibeorbit.com')} />
-        <LinkRow icon={<Shield size={16} />} label="Privacy Policy"
+        <LinkRow icon={<Shield size={16} />}     label="Privacy Policy"
           sub="How we handle your data"
           onClick={() => flash('Coming soon')} />
       </Section>
 
-      {/* ── DANGER ZONE ── */}
+      {/* ── ACCOUNT ACTIONS ── */}
       <Section title="Account Actions">
         <button onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 transition-colors rounded-xl">
@@ -219,7 +231,8 @@ export default function SettingsPage() {
             <p className="text-xs text-red-400/60">Sign out of your account</p>
           </div>
         </button>
-        <button onClick={() => flash('Contact support to delete account')}
+        <button
+          onClick={() => flash('Contact support@vibeorbit.com to delete your account')}
           className="w-full flex items-center gap-3 px-4 py-3 text-red-400/50 hover:bg-red-400/5 transition-colors rounded-xl border-t border-white/[0.04]">
           <Trash2 size={16} />
           <div className="text-left">
@@ -230,7 +243,7 @@ export default function SettingsPage() {
       </Section>
 
       <p className="text-center text-xs text-white/15 mt-8">
-        VibeOrbit v1.0.0 — Made by Bramuel Godwill
+        VibeOrbit v1.0.0 — Made with ❤️ by Bramuel Godwill
       </p>
     </div>
   );
@@ -252,11 +265,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function ToggleRow({ icon, label, sub, value, onChange, border = false }: {
-  icon: React.ReactNode; label: string; sub: string;
-  value: boolean; onChange: (v: boolean) => void; border?: boolean;
+  icon: React.ReactNode;
+  label: string;
+  sub: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  border?: boolean;
 }) {
   return (
-    <div className={`flex items-center justify-between px-4 py-3 ${border ? 'border-t border-white/[0.06]' : ''}`}>
+    <div className={`flex items-center justify-between px-4 py-3 ${
+      border ? 'border-t border-white/[0.06]' : ''
+    }`}>
       <div className="flex items-center gap-3">
         <span className="text-white/40">{icon}</span>
         <div>
@@ -278,7 +297,10 @@ function ToggleRow({ icon, label, sub, value, onChange, border = false }: {
 }
 
 function LinkRow({ icon, label, sub, onClick }: {
-  icon: React.ReactNode; label: string; sub: string; onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  sub: string;
+  onClick: () => void;
 }) {
   return (
     <button onClick={onClick}
