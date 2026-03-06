@@ -1,20 +1,20 @@
 import { create } from 'zustand';
 
 export interface Song {
-  id: string;
-  title: string;
+  id:          string;
+  title:       string;
   artist_name: string;
-  audio_url: string;
-  cover_url?: string;
-  genre?: string;
-  duration?: number;
+  audio_url:   string;
+  cover_url?:  string;
+  genre?:      string;
+  duration?:   number;
 }
 
 interface PlayerState {
   currentSong: Song | null;
   isPlaying:   boolean;
-  queue:        Song[];
-  volume:       number;
+  queue:       Song[];
+  volume:      number;
   playSong:    (song: Song, newQueue?: Song[]) => void;
   togglePlay:  () => void;
   setQueue:    (songs: Song[]) => void;
@@ -24,17 +24,35 @@ interface PlayerState {
   stop:        () => void;
 }
 
+const recordPlay = (songId: string) => {
+  try {
+    const token   = typeof window !== 'undefined' ? localStorage.getItem('vb_token') : null;
+    const apiUrl  = process.env.NEXT_PUBLIC_API_URL || '/api';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    fetch(apiUrl + '/songs/' + songId + '/play', {
+      method: 'POST',
+      headers,
+    }).catch(() => {});
+  } catch {}
+};
+
 export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentSong: null,
   isPlaying:   false,
-  queue:        [],
-  volume:       0.75,
+  queue:       [],
+  volume:      0.75,
 
   playSong: (song, newQueue) => {
+    // Only record a play if it's a different song
+    const current = get().currentSong;
+    if (!current || current.id !== song.id) {
+      recordPlay(song.id);
+    }
     set({
       currentSong: song,
       isPlaying:   true,
-      queue:        newQueue ?? get().queue,
+      queue:       newQueue ?? get().queue,
     });
   },
 
@@ -47,17 +65,23 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playNext: () => {
     const { queue, currentSong } = get();
     if (!queue.length) return;
-    const idx = queue.findIndex((s) => s.id === currentSong?.id);
+    const idx  = queue.findIndex((s) => s.id === currentSong?.id);
     const next = queue[idx + 1];
-    if (next) set({ currentSong: next, isPlaying: true });
+    if (next) {
+      recordPlay(next.id);
+      set({ currentSong: next, isPlaying: true });
+    }
   },
 
   playPrev: () => {
     const { queue, currentSong } = get();
     if (!queue.length) return;
-    const idx = queue.findIndex((s) => s.id === currentSong?.id);
+    const idx  = queue.findIndex((s) => s.id === currentSong?.id);
     const prev = queue[idx - 1];
-    if (prev) set({ currentSong: prev, isPlaying: true });
+    if (prev) {
+      recordPlay(prev.id);
+      set({ currentSong: prev, isPlaying: true });
+    }
   },
 
   stop: () => set({ currentSong: null, isPlaying: false }),

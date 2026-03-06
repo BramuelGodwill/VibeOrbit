@@ -72,7 +72,7 @@ exports.getAllSongs = async(req, res) => {
     }
 };
 
-// ── GET SINGLE SONG ───────────────────────────────────────────────────────
+// ── GET SINGLE SONG (no play count here — use POST /:id/play instead) ─────
 exports.getSong = async(req, res) => {
     try {
         const result = await pool.query(
@@ -81,19 +81,7 @@ exports.getSong = async(req, res) => {
        LEFT JOIN artists a ON s.artist_id = a.id
        WHERE s.id = $1`, [req.params.id]
         );
-
         if (!result.rows[0]) return res.status(404).json({ error: 'Song not found' });
-
-        await pool.query(
-            'UPDATE songs SET play_count = play_count + 1 WHERE id = $1', [req.params.id]
-        );
-
-        if (req.userId) {
-            await pool.query(
-                'INSERT INTO listening_history (user_id, song_id) VALUES ($1, $2)', [req.userId, req.params.id]
-            ).catch(function() {});
-        }
-
         res.json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch song' });
@@ -122,9 +110,10 @@ exports.searchSongs = async(req, res) => {
     }
 };
 
-// ── GET RECOMMENDATIONS ───────────────────────────────────────────────────
+// ── GET RECOMMENDATIONS (based on user's listening history genres) ─────────
 exports.getRecommendations = async(req, res) => {
     try {
+        // Find genres this user listens to most
         const historyResult = await pool.query(
             `SELECT s.genre, COUNT(*) AS listen_count
        FROM listening_history lh
@@ -139,6 +128,7 @@ exports.getRecommendations = async(req, res) => {
         let songs;
 
         if (genres.length > 0) {
+            // Return songs in those genres sorted by most played by everyone
             songs = await pool.query(
                 `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
          FROM songs s
@@ -149,6 +139,7 @@ exports.getRecommendations = async(req, res) => {
             );
         }
 
+        // Fallback: most played songs overall
         if (!songs || songs.rows.length === 0) {
             songs = await pool.query(
                 `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
@@ -165,7 +156,7 @@ exports.getRecommendations = async(req, res) => {
     }
 };
 
-// ── GET TRENDING ──────────────────────────────────────────────────────────
+// ── GET TRENDING (most played by all users) ───────────────────────────────
 exports.getTrending = async(req, res) => {
     try {
         const result = await pool.query(
@@ -185,12 +176,12 @@ exports.getTrending = async(req, res) => {
 exports.deleteSong = async(req, res) => {
     try {
         const song = await pool.query(
-            'SELECT * FROM songs WHERE id=$1 AND uploaded_by=$2', [req.params.id, req.userId]
+            'SELECT * FROM songs WHERE id = $1 AND uploaded_by = $2', [req.params.id, req.userId]
         );
         if (!song.rows[0]) {
             return res.status(404).json({ error: 'Song not found or unauthorized' });
         }
-        await pool.query('DELETE FROM songs WHERE id=$1', [req.params.id]);
+        await pool.query('DELETE FROM songs WHERE id = $1', [req.params.id]);
         res.json({ message: 'Song deleted' });
     } catch (err) {
         res.status(500).json({ error: 'Delete failed' });

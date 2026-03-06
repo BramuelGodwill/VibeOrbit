@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore }   from '@/store/authStore';
 import {
   Play, Heart, Clock, Flame, Music2, Radio,
-  Headphones, Crown
+  Headphones, Crown, RefreshCw
 } from 'lucide-react';
 
 const GENRES = ['All','Pop','Hip-Hop','R&B','Afrobeats','Bongo Flava',
@@ -20,7 +20,7 @@ function SongRow({ song, queue }: { song: any; queue: any[] }) {
     <div
       onClick={() => playSong(song, queue)}
       className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${
-        isActive ? 'bg-white/10' : 'hover:bg-white/[0.06]'
+        isActive ? 'bg-white/10' : 'hover:bg-white/[0.06] active:bg-white/10'
       }`}
     >
       <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-white/10 shrink-0">
@@ -59,7 +59,7 @@ function SongCard({ song, queue }: { song: any; queue: any[] }) {
   return (
     <div onClick={() => playSong(song, queue)}
       className={`group cursor-pointer rounded-xl p-2.5 transition-all shrink-0 w-36 md:w-40 ${
-        isActive ? 'bg-white/10' : 'hover:bg-white/[0.07]'
+        isActive ? 'bg-white/10' : 'hover:bg-white/[0.07] active:bg-white/10'
       }`}>
       <div className="relative w-full aspect-square rounded-lg overflow-hidden bg-white/10 mb-2">
         {song.cover_url
@@ -91,55 +91,62 @@ export default function HomePage() {
   const [popular,     setPopular]     = useState<any[]>([]);
   const [genre,       setGenre]       = useState('All');
   const [loading,     setLoading]     = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
   const { setQueue }                  = usePlayerStore();
   const { user }                      = useAuthStore();
 
   const hour     = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
-  useEffect(() => {
-    const load = async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      // Fetch all songs — play_count comes from backend
+      const songsRes     = await api.get('/songs');
+      const songs: any[] = songsRes.data;
+      setAllSongs(songs);
+      setQueue(songs);
+
+      // Popular = sorted by play_count (total plays by ALL users)
+      const sorted = [...songs].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
+      setPopular(sorted.slice(0, 10));
+
+      // Top Mixes = personalised recommendations based on THIS user's listening history
       try {
-        // All songs
-        const songsRes = await api.get('/songs');
-        const songs: any[] = songsRes.data;
-        setAllSongs(songs);
-        setQueue(songs);
+        const recRes = await api.get('/songs/recommendations');
+        // Sort recommendations by play_count too
+        const recSorted = [...recRes.data].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
+        setRecommended(recSorted.slice(0, 10));
+      } catch {
+        setRecommended(sorted.slice(0, 10));
+      }
 
-        // Popular this week — sorted by total play_count across all users
-        const sorted = [...songs].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
-        setPopular(sorted.slice(0, 10));
+      // Liked songs = songs this user pressed the heart button on
+      try {
+        const likesRes = await api.get('/users/likes');
+        // Sort liked songs by play count
+        const likesSorted = [...likesRes.data].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
+        setLikedSongs(likesSorted.slice(0, 10));
+      } catch {
+        setLikedSongs([]);
+      }
 
-        // Recommendations (songs this user has been listening to by genre)
-        try {
-          const recRes = await api.get('/songs/recommendations');
-          setRecommended(recRes.data.slice(0, 10));
-        } catch {
-          setRecommended(sorted.slice(0, 10));
-        }
+      // Jump back in = THIS user's last 2 played songs
+      try {
+        const histRes = await api.get('/users/history');
+        setRecent(histRes.data.slice(0, 2));
+      } catch {
+        setRecent([]);
+      }
 
-        // User's liked songs — fetched from their likes endpoint
-        try {
-          const likesRes = await api.get('/users/likes');
-          setLikedSongs(likesRes.data.slice(0, 10));
-        } catch {
-          // Fallback: songs the user has listened to most
-          setLikedSongs([]);
-        }
+    } catch {}
+    finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [setQueue]);
 
-        // User's recently played — only THIS user's history
-        try {
-          const histRes = await api.get('/users/history');
-          setRecent(histRes.data.slice(0, 2)); // only 2 for jump back in
-        } catch {
-          setRecent([]);
-        }
-
-      } catch {}
-      finally { setLoading(false); }
-    };
-    load();
-  }, []);
+  useEffect(() => { load(); }, [load]);
 
   const filteredSongs = genre === 'All'
     ? allSongs
@@ -171,6 +178,16 @@ export default function HomePage() {
           {user && <p className="text-white/40 text-sm truncate">{user.username}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* Refresh button — reload play counts */}
+          <button
+            onClick={() => load(true)}
+            disabled={refreshing}
+            title="Refresh play counts"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-white/30 hover:text-white hover:bg-white/10 transition-all"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+
           {!user?.is_premium && (
             <Link href="/profile"
               className="flex items-center gap-1.5 bg-white text-black text-[11px] font-black px-3 py-1.5 rounded-full hover:opacity-90 active:scale-95 transition-all whitespace-nowrap">
@@ -209,14 +226,13 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* ── JUMP BACK IN — 2 songs side by side ── */}
+      {/* ── JUMP BACK IN — your last 2 played songs, side by side ── */}
       {recent.length > 0 && genre === 'All' && (
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Clock size={15} className="text-white/40" />
             <h2 className="text-base font-bold">Jump back in</h2>
           </div>
-          {/* Always 2 columns side by side */}
           <div className="grid grid-cols-2 gap-2">
             {recent.slice(0, 2).map(song => (
               <div key={song.id}
@@ -238,12 +254,12 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── LIKED SONGS — only songs the user actually liked ── */}
+      {/* ── LIKED SONGS — only songs you pressed heart on ── */}
       {likedSongs.length > 0 && genre === 'All' && (
         <section>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Heart size={15} className="text-red-400" />
+              <Heart size={15} className="text-red-400" fill="currentColor" />
               <h2 className="text-base font-bold">Liked Songs</h2>
             </div>
             <span className="text-xs text-white/30">{likedSongs.length} songs</span>
@@ -254,14 +270,14 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── YOUR TOP MIXES — personalised by listening history ── */}
+      {/* ── YOUR TOP MIXES — genres you listen to most, sorted by plays ── */}
       {recommended.length > 0 && genre === 'All' && (
         <section>
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-1">
             <Headphones size={15} className="text-white/40" />
             <h2 className="text-base font-bold">Your Top Mixes</h2>
           </div>
-          <p className="text-xs text-white/25 -mt-2 mb-3">Based on your listening history</p>
+          <p className="text-xs text-white/25 mb-3">Based on your listening history</p>
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
             {recommended.map(s => (
               <SongCard key={s.id} song={s} queue={recommended} />
@@ -270,7 +286,7 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── POPULAR THIS WEEK — ranked by total plays from all users ── */}
+      {/* ── POPULAR THIS WEEK — all users' total plays, ranked ── */}
       {popular.length > 0 && genre === 'All' && (
         <section>
           <div className="flex items-center gap-2 mb-1">
@@ -283,9 +299,11 @@ export default function HomePage() {
               <div key={s.id}
                 onClick={() => usePlayerStore.getState().playSong(s, popular)}
                 className="group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/[0.06] active:bg-white/10 transition-all">
-                {/* Rank number */}
                 <span className={`text-sm font-black w-5 text-right shrink-0 ${
-                  i === 0 ? 'text-yellow-400' : i === 1 ? 'text-white/50' : i === 2 ? 'text-orange-400/60' : 'text-white/20'
+                  i === 0 ? 'text-yellow-400' :
+                  i === 1 ? 'text-white/50'   :
+                  i === 2 ? 'text-orange-400/70' :
+                            'text-white/20'
                 }`}>{i + 1}</span>
                 <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 shrink-0">
                   {s.cover_url
@@ -297,11 +315,17 @@ export default function HomePage() {
                   <p className="text-sm font-medium truncate">{s.title}</p>
                   <p className="text-xs text-white/35 truncate">{s.artist_name}</p>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-white/30 font-medium">
-                    {(s.play_count || 0).toLocaleString()}
-                  </p>
-                  <p className="text-[10px] text-white/15">plays</p>
+                <div className="text-right shrink-0 min-w-[48px]">
+                  {s.play_count > 0 ? (
+                    <>
+                      <p className="text-xs text-white/40 font-semibold tabular-nums">
+                        {s.play_count.toLocaleString()}
+                      </p>
+                      <p className="text-[10px] text-white/20">plays</p>
+                    </>
+                  ) : (
+                    <p className="text-[10px] text-white/15">no plays yet</p>
+                  )}
                 </div>
               </div>
             ))}
