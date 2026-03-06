@@ -60,21 +60,48 @@ router.post('/avatar', authMiddleware, (req, res) => {
 });
 
 // ── GET listening history ─────────────────────────────────────────────────
-router.get('/history', authMiddleware, async(req, res) => {
+// ── LIKE a song ───────────────────────────────────────────────────────────
+router.post('/likes/:songId', authMiddleware, async(req, res) => {
+    try {
+        await pool.query(
+            'INSERT INTO liked_songs (user_id, song_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.userId, req.params.songId]
+        );
+        res.json({ liked: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to like song' });
+    }
+});
+
+// ── UNLIKE a song ─────────────────────────────────────────────────────────
+router.delete('/likes/:songId', authMiddleware, async(req, res) => {
+    try {
+        await pool.query(
+            'DELETE FROM liked_songs WHERE user_id=$1 AND song_id=$2', [req.userId, req.params.songId]
+        );
+        res.json({ liked: false });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to unlike song' });
+    }
+});
+
+// ── GET user's liked songs ────────────────────────────────────────────────
+router.get('/likes', authMiddleware, async(req, res) => {
     try {
         const result = await pool.query(
-            `SELECT DISTINCT ON (s.id) s.*, a.name AS artist_name, lh.listened_at
-       FROM listening_history lh
-       JOIN songs s ON lh.song_id = s.id
+            `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
+       FROM liked_songs ls
+       JOIN songs s ON ls.song_id = s.id
        LEFT JOIN artists a ON s.artist_id = a.id
-       WHERE lh.user_id = $1
-       ORDER BY s.id, lh.listened_at DESC
-       LIMIT 20`, [req.userId]
+       WHERE ls.user_id = $1
+       ORDER BY ls.created_at DESC`, [req.userId]
         );
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch history' });
+        res.status(500).json({ error: 'Failed to fetch liked songs' });
     }
 });
+
+
+
 
 module.exports = router;
