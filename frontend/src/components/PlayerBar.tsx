@@ -17,48 +17,53 @@ function formatTime(secs: number) {
 }
 
 export default function PlayerBar() {
-  const { currentSong, isPlaying, togglePlay, playNext, playPrev, volume, setVolume } = usePlayerStore();
+  const {
+    currentSong, isPlaying, togglePlay,
+    playNext, playPrev, volume, setVolume,
+  } = usePlayerStore();
   const { isAuthenticated } = useAuthStore();
-  const audioRef    = useRef<HTMLAudioElement>(null);
-  const [current,   setCurrent]   = useState(0);
-  const [duration,  setDuration]  = useState(0);
-  const [muted,     setMuted]     = useState(false);
-  const [expanded,  setExpanded]  = useState(false);
-  const [loop,      setLoop]      = useState<'none' | 'one' | 'all'>('none');
-  const [liked,     setLiked]     = useState(false);
-  const [shareMsg,  setShareMsg]  = useState('');
-  const [playlists, setPlaylists] = useState<any[]>([]);
-  const [showPL,    setShowPL]    = useState(false);
-  const [addedMsg,  setAddedMsg]  = useState('');
 
+  const audioRef   = useRef<HTMLAudioElement>(null);
+  const [current,  setCurrent]  = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [muted,    setMuted]    = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [loop,     setLoop]     = useState<'none' | 'one' | 'all'>('none');
+  const [liked,    setLiked]    = useState(false);
+  const [shareMsg, setShareMsg] = useState('');
+  const [playlists,setPlaylists]= useState<any[]>([]);
+  const [showPL,   setShowPL]   = useState(false);
+  const [addedMsg, setAddedMsg] = useState('');
+
+  // ── Load + play new song ───────────────────────────────────────────────
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentSong) return;
 
-    // Set preload to auto so browser buffers immediately
-    audio.preload    = 'auto';
-    audio.src        = currentSong.audio_url;
-    audio.loop       = loop === 'one';
-    audio.volume     = muted ? 0 : volume;
+    // Remove any previous canplay listener to avoid double-play
+    const tryPlay = () => { audio.play().catch(() => {}); };
+
+    audio.pause();
+    audio.preload  = 'auto';
+    audio.src      = currentSong.audio_url;
+    audio.loop     = false; // handled manually
+    audio.volume   = muted ? 0 : volume;
+    audio.currentTime = 0;
     setLiked(false);
+    setCurrent(0);
+    setDuration(0);
 
-    // Play as soon as enough data is buffered
-    const tryPlay = () => {
-      audio.play().catch(() => {});
-    };
-
-    // If already have enough data, play now
     if (audio.readyState >= 3) {
       tryPlay();
     } else {
       audio.addEventListener('canplay', tryPlay, { once: true });
     }
 
-    return () => {
-      audio.removeEventListener('canplay', tryPlay);
-    };
-  }, [currentSong]);
+    return () => { audio.removeEventListener('canplay', tryPlay); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSong?.id]); // only re-run when song ID changes, NOT on every render
 
+  // ── Play / pause toggle ───────────────────────────────────────────────
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -66,32 +71,43 @@ export default function PlayerBar() {
     else           audio.pause();
   }, [isPlaying]);
 
+  // ── Volume / mute ────────────────────────────────────────────────────
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = muted ? 0 : volume;
   }, [volume, muted]);
 
+  // ── Document title ───────────────────────────────────────────────────
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.loop = loop === 'one';
-  }, [loop]);
-
-  useEffect(() => {
-    if (currentSong) {
-      document.title = `${currentSong.title} — VibeOrbit`;
-    } else {
-      document.title = 'VibeOrbit — Music. Your way.';
-    }
+    document.title = currentSong
+      ? `${currentSong.title} — VibeOrbit`
+      : 'VibeOrbit — Music. Your way.';
   }, [currentSong]);
 
+  // ── Song ended ───────────────────────────────────────────────────────
   const handleEnded = () => {
     const audio = audioRef.current;
+    if (!audio) return;
+
     if (loop === 'one') {
-      if (audio) { audio.currentTime = 0; audio.play().catch(() => {}); }
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
       return;
     }
-    if (loop === 'all') { playNext(); return; }
-    playNext();
+
+    const { queue, currentSong: cs } = usePlayerStore.getState();
+    const idx  = queue.findIndex(s => s.id === cs?.id);
+    const next = queue[idx + 1];
+
+    if (next) {
+      usePlayerStore.getState().playSong(next, queue);
+    } else if (loop === 'all') {
+      const first = queue[0];
+      if (first) usePlayerStore.getState().playSong(first, queue);
+    } else {
+      // End of queue, no loop — stop cleanly
+      audio.currentTime = 0;
+      usePlayerStore.setState({ isPlaying: false });
+    }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,24 +118,31 @@ export default function PlayerBar() {
     setCurrent(time);
   };
 
-  const cycleLoop = () => {
+  const cycleLoop = () =>
     setLoop(l => l === 'none' ? 'all' : l === 'all' ? 'one' : 'none');
-  };
 
-  const handleLike = () => {
-    if (!isAuthenticated()) return;
-    setLiked(l => !l);
+  const handleLike = async () => {
+    if (!isAuthenticated() || !currentSong) return;
+    const newLiked = !liked;
+    setLiked(newLiked);
+    try {
+      if (newLiked) {
+        await api.post('/users/likes/' + currentSong.id);
+      } else {
+        await api.delete('/users/likes/' + currentSong.id);
+      }
+    } catch {
+      setLiked(!newLiked); // revert on error
+    }
   };
 
   const handleShare = async () => {
-    const url = window.location.href;
+    const url  = window.location.origin;
     const text = `🎵 Listening to "${currentSong?.title}" by ${currentSong?.artist_name || 'Unknown'} on VibeOrbit`;
     if (navigator.share) {
-      try {
-        await navigator.share({ title: currentSong?.title, text, url });
-      } catch {}
+      try { await navigator.share({ title: currentSong?.title, text, url }); } catch {}
     } else {
-      await navigator.clipboard.writeText(`${text}\n${url}`);
+      await navigator.clipboard.writeText(text + '\n' + url).catch(() => {});
       setShareMsg('Link copied!');
       setTimeout(() => setShareMsg(''), 2000);
     }
@@ -137,66 +160,78 @@ export default function PlayerBar() {
   const addToPlaylist = async (playlistId: string) => {
     if (!currentSong) return;
     try {
-      await api.post('/playlists/add-song', {
-        playlistId,
-        songId: currentSong.id,
-      });
-      setAddedMsg('Added to playlist!');
+      await api.post('/playlists/add-song', { playlistId, songId: currentSong.id });
+      setAddedMsg('Added!');
       setShowPL(false);
       setTimeout(() => setAddedMsg(''), 2000);
     } catch (err: any) {
-      setAddedMsg(err.response?.data?.error || 'Failed to add');
+      setAddedMsg(err.response?.data?.error || 'Failed');
       setTimeout(() => setAddedMsg(''), 2000);
     }
   };
 
-  const progress = duration ? (current / duration) * 100 : 0;
+  const progress  = duration ? (current / duration) * 100 : 0;
+  const LoopIcon  = loop === 'one' ? Repeat1 : Repeat;
+  const loopColor = loop !== 'none' ? 'text-white' : 'text-white/30';
 
   if (!currentSong) return null;
 
-  const LoopIcon = loop === 'one' ? Repeat1 : Repeat;
-  const loopColor = loop !== 'none' ? 'text-white' : 'text-white/30';
+  // ── Single <audio> element shared by both mobile + desktop ───────────
+  const audioEl = (
+    <audio
+      ref={audioRef}
+      preload="auto"
+      onTimeUpdate={e => {
+        const a = e.currentTarget;
+        setCurrent(a.currentTime);
+        setDuration(a.duration || 0);
+      }}
+      onEnded={handleEnded}
+      onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
+    />
+  );
 
   return (
     <>
-      {/* ── Playlist picker popup ── */}
+      {/* ── Playlist picker ── */}
       {showPL && (
         <div className="fixed inset-0 z-[70] bg-black/70 flex items-end sm:items-center justify-center p-4"
           onClick={() => setShowPL(false)}>
           <div className="bg-[#111] border border-white/10 rounded-2xl w-full max-w-xs p-4"
             onClick={e => e.stopPropagation()}>
             <h3 className="font-bold mb-3 text-sm">Add to playlist</h3>
-            {playlists.length === 0 ? (
-              <p className="text-white/40 text-sm text-center py-4">No playlists yet. Create one in Library.</p>
-            ) : (
-              <div className="space-y-1 max-h-60 overflow-y-auto">
-                {playlists.map(p => (
-                  <button key={p.id} onClick={() => addToPlaylist(p.id)}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/10 text-sm transition-colors">
-                    {p.name}
-                    <span className="text-white/30 text-xs ml-2">{p.song_count || 0} songs</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            {playlists.length === 0
+              ? <p className="text-white/40 text-sm text-center py-4">No playlists yet.</p>
+              : (
+                <div className="space-y-1 max-h-60 overflow-y-auto">
+                  {playlists.map(p => (
+                    <button key={p.id} onClick={() => addToPlaylist(p.id)}
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/10 text-sm transition-colors">
+                      {p.name}
+                      <span className="text-white/30 text-xs ml-2">{p.song_count || 0} songs</span>
+                    </button>
+                  ))}
+                </div>
+              )
+            }
             <button onClick={() => setShowPL(false)}
-              className="mt-3 w-full text-xs text-white/30 hover:text-white transition-colors py-1">
+              className="mt-3 w-full text-xs text-white/30 hover:text-white py-1">
               Cancel
             </button>
           </div>
         </div>
       )}
 
-      {/* ── Expanded full screen player ── */}
+      {/* ── Full-screen expanded player (mobile) ── */}
       {expanded && (
         <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center px-8"
           style={{ background: 'linear-gradient(180deg, #1a1a1a 0%, #000 100%)' }}>
           <button onClick={() => setExpanded(false)}
-            className="absolute top-5 right-5 text-white/40 hover:text-white">
+            className="absolute top-5 right-5 text-white/40 hover:text-white p-2">
             <X size={24} />
           </button>
 
-          {/* Big cover */}
+          {/* Cover */}
           <div className="w-64 h-64 md:w-72 md:h-72 rounded-2xl overflow-hidden bg-white/10 mb-6 shadow-2xl">
             {currentSong.cover_url
               ? <img src={currentSong.cover_url} alt={currentSong.title} className="w-full h-full object-cover" />
@@ -204,24 +239,24 @@ export default function PlayerBar() {
             }
           </div>
 
-          {/* Song info + like/share */}
+          {/* Title + like/share */}
           <div className="flex items-center justify-between w-full max-w-xs mb-6">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h2 className="text-xl font-black truncate">{currentSong.title}</h2>
               <p className="text-white/50 text-sm mt-0.5">{currentSong.artist_name || 'Unknown Artist'}</p>
             </div>
             <div className="flex items-center gap-3 shrink-0 ml-4">
               <button onClick={handleLike}
-                className={`transition-all ${liked ? 'text-red-400 scale-110' : 'text-white/30 hover:text-white'}`}>
+                className={`transition-all active:scale-90 ${liked ? 'text-red-400 scale-110' : 'text-white/30'}`}>
                 <Heart size={22} fill={liked ? 'currentColor' : 'none'} />
               </button>
-              <button onClick={handleShare} className="text-white/30 hover:text-white transition-colors">
+              <button onClick={handleShare} className="text-white/30 active:scale-90 transition-all">
                 <Share2 size={20} />
               </button>
             </div>
           </div>
 
-          {/* Seek */}
+          {/* Seek bar */}
           <div className="w-full max-w-xs mb-5">
             <input type="range" min="0" max="100" value={progress}
               onChange={handleSeek} className="w-full" />
@@ -233,20 +268,27 @@ export default function PlayerBar() {
 
           {/* Controls */}
           <div className="flex items-center gap-7 mb-6">
-            <button onClick={cycleLoop} className={`transition-colors ${loopColor}`}>
+            <button onClick={cycleLoop}
+              className={`transition-colors active:scale-90 ${loopColor}`}>
               <LoopIcon size={20} />
             </button>
-            <button onClick={playPrev} className="text-white/50 hover:text-white transition-colors">
+            <button onClick={playPrev}
+              className="text-white/50 hover:text-white active:scale-90 transition-all">
               <SkipBack size={28} />
             </button>
             <button onClick={togglePlay}
-              className="w-14 h-14 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform shadow-xl">
-              {isPlaying ? <Pause size={22} fill="black" /> : <Play size={22} fill="black" className="ml-0.5" />}
+              className="w-14 h-14 rounded-full bg-white flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-xl">
+              {isPlaying
+                ? <Pause size={22} fill="black" />
+                : <Play  size={22} fill="black" className="ml-0.5" />
+              }
             </button>
-            <button onClick={playNext} className="text-white/50 hover:text-white transition-colors">
+            <button onClick={playNext}
+              className="text-white/50 hover:text-white active:scale-90 transition-all">
               <SkipForward size={28} />
             </button>
-            <button onClick={loadPlaylists} className="text-white/30 hover:text-white transition-colors">
+            <button onClick={loadPlaylists}
+              className="text-white/30 hover:text-white active:scale-90 transition-all">
               <ListPlus size={20} />
             </button>
           </div>
@@ -258,11 +300,10 @@ export default function PlayerBar() {
             </button>
             <input type="range" min="0" max="1" step="0.05"
               value={muted ? 0 : volume}
-              onChange={(e) => { setVolume(parseFloat(e.target.value)); setMuted(false); }}
+              onChange={e => { setVolume(parseFloat(e.target.value)); setMuted(false); }}
               className="flex-1" />
           </div>
 
-          {/* Status messages */}
           {(shareMsg || addedMsg) && (
             <p className="mt-4 text-xs text-white/50 bg-white/10 px-4 py-2 rounded-full">
               {shareMsg || addedMsg}
@@ -271,95 +312,99 @@ export default function PlayerBar() {
         </div>
       )}
 
-      {/* ── Mini player (mobile) ── */}
+      {/* ── MOBILE mini bar ── */}
       <div className="fixed bottom-0 inset-x-0 z-50 md:hidden">
+        {/* Progress line */}
         <div className="h-[2px] bg-white/10 relative">
-          <div className="absolute top-0 left-0 h-full bg-white transition-all duration-300"
+          <div className="absolute inset-y-0 left-0 bg-white transition-all duration-300"
             style={{ width: `${progress}%` }} />
         </div>
         <div className="bg-black/97 backdrop-blur-xl border-t border-white/[0.06] px-3 py-2"
           style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
-          <audio ref={audioRef}
-            preload="auto"
-            onTimeUpdate={e => { const a = e.currentTarget; setCurrent(a.currentTime); setDuration(a.duration || 0); }}
-            onEnded={handleEnded}
-            onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
-          />
+          {audioEl}
           <div className="flex items-center gap-2">
+            {/* Cover — tap to expand */}
             <div onClick={() => setExpanded(true)}
-              className="w-10 h-10 rounded-lg bg-white/10 overflow-hidden shrink-0 cursor-pointer">
+              className="w-10 h-10 rounded-lg bg-white/10 overflow-hidden shrink-0 cursor-pointer active:opacity-70">
               {currentSong.cover_url
                 ? <img src={currentSong.cover_url} alt="" className="w-full h-full object-cover" />
-                : <Music2 size={14} className="m-auto mt-3 text-white/20" />}
+                : <Music2 size={14} className="m-auto mt-3 text-white/20" />
+              }
             </div>
+            {/* Title — tap to expand */}
             <div onClick={() => setExpanded(true)} className="flex-1 min-w-0 cursor-pointer">
               <p className="text-sm font-semibold truncate leading-tight">{currentSong.title}</p>
-              <p className="text-xs text-white/35 truncate">{currentSong.artist_name}</p>
+              <p className="text-xs text-white/35 truncate">{currentSong.artist_name || 'Unknown'}</p>
             </div>
+            {/* Like */}
             <button onClick={handleLike}
-              className={`p-1.5 transition-all ${liked ? 'text-red-400' : 'text-white/30'}`}>
+              className={`p-1.5 active:scale-90 transition-all ${liked ? 'text-red-400' : 'text-white/30'}`}>
               <Heart size={17} fill={liked ? 'currentColor' : 'none'} />
             </button>
-            <button onClick={playPrev} className="text-white/40 p-1">
+            {/* Prev */}
+            <button onClick={playPrev} className="p-1.5 text-white/40 active:scale-90 transition-all">
               <SkipBack size={18} />
             </button>
+            {/* Play/Pause */}
             <button onClick={togglePlay}
-              className="w-9 h-9 rounded-full bg-white flex items-center justify-center shrink-0">
-              {isPlaying ? <Pause size={14} fill="black" /> : <Play size={14} fill="black" className="ml-0.5" />}
+              className="w-9 h-9 rounded-full bg-white flex items-center justify-center shrink-0 active:scale-90 transition-transform">
+              {isPlaying
+                ? <Pause size={14} fill="black" />
+                : <Play  size={14} fill="black" className="ml-0.5" />
+              }
             </button>
-            <button onClick={playNext} className="text-white/40 p-1">
+            {/* Next */}
+            <button onClick={playNext} className="p-1.5 text-white/40 active:scale-90 transition-all">
               <SkipForward size={18} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── Desktop player bar ── */}
+      {/* ── DESKTOP player bar ── */}
       <div className="hidden md:block fixed bottom-0 inset-x-0 z-50">
         <div className="h-[1px] bg-white/10 relative">
-          <div className="absolute top-0 left-0 h-full bg-white transition-all"
+          <div className="absolute inset-y-0 left-0 bg-white transition-all"
             style={{ width: `${progress}%` }} />
         </div>
         <div className="bg-black/97 backdrop-blur-xl border-t border-white/[0.06] px-4 py-3">
-          <audio ref={audioRef}
-            preload="auto"
-            onTimeUpdate={e => { const a = e.currentTarget; setCurrent(a.currentTime); setDuration(a.duration || 0); }}
-            onEnded={handleEnded}
-            onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
-          />
+          {audioEl}
           <div className="flex items-center gap-4 max-w-5xl mx-auto">
 
-            {/* Song info */}
+            {/* Song info + like */}
             <div className="flex items-center gap-3 w-64 min-w-0">
               <div className="w-11 h-11 rounded-lg bg-white/10 overflow-hidden shrink-0">
                 {currentSong.cover_url
                   ? <img src={currentSong.cover_url} alt="" className="w-full h-full object-cover" />
-                  : <Music2 size={16} className="m-auto mt-3 text-white/20" />}
+                  : <Music2 size={16} className="m-auto mt-3 text-white/20" />
+                }
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold truncate">{currentSong.title}</p>
                 <p className="text-xs text-white/35 truncate">{currentSong.artist_name || 'Unknown'}</p>
               </div>
-              {/* Like */}
               <button onClick={handleLike}
                 className={`shrink-0 transition-all ${liked ? 'text-red-400 scale-110' : 'text-white/25 hover:text-white'}`}>
                 <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
               </button>
             </div>
 
-            {/* Center controls */}
+            {/* Center controls + seek */}
             <div className="flex-1 flex flex-col items-center gap-1.5">
               <div className="flex items-center gap-5">
-                <button onClick={cycleLoop} title={`Loop: ${loop}`}
-                  className={`transition-colors ${loopColor}`}>
+                <button onClick={cycleLoop} title={'Loop: ' + loop}
+                  className={'transition-colors ' + loopColor}>
                   <LoopIcon size={16} />
                 </button>
                 <button onClick={playPrev} className="text-white/40 hover:text-white transition-colors">
                   <SkipBack size={18} />
                 </button>
                 <button onClick={togglePlay}
-                  className="w-9 h-9 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform">
-                  {isPlaying ? <Pause size={15} fill="black" /> : <Play size={15} fill="black" className="ml-0.5" />}
+                  className="w-9 h-9 rounded-full bg-white flex items-center justify-center hover:scale-105 active:scale-95 transition-transform">
+                  {isPlaying
+                    ? <Pause size={15} fill="black" />
+                    : <Play  size={15} fill="black" className="ml-0.5" />
+                  }
                 </button>
                 <button onClick={playNext} className="text-white/40 hover:text-white transition-colors">
                   <SkipForward size={18} />
@@ -377,9 +422,8 @@ export default function PlayerBar() {
               </div>
             </div>
 
-            {/* Right controls */}
+            {/* Right: share + volume */}
             <div className="flex items-center gap-3 w-40 justify-end">
-              {/* Share */}
               <div className="relative">
                 <button onClick={handleShare} title="Share"
                   className="text-white/25 hover:text-white transition-colors">
@@ -399,7 +443,7 @@ export default function PlayerBar() {
               </button>
               <input type="range" min="0" max="1" step="0.05"
                 value={muted ? 0 : volume}
-                onChange={(e) => { setVolume(parseFloat(e.target.value)); if (muted) setMuted(false); }}
+                onChange={e => { setVolume(parseFloat(e.target.value)); if (muted) setMuted(false); }}
                 className="w-20" />
             </div>
 
