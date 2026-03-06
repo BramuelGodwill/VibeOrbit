@@ -10,7 +10,6 @@ exports.uploadSong = async(req, res) => {
     if (!title) return res.status(400).json({ error: 'Song title is required' });
 
     try {
-        // Get or create artist
         let artistId = null;
         let artistImg = null;
 
@@ -29,7 +28,6 @@ exports.uploadSong = async(req, res) => {
             }
         }
 
-        // If no cover provided but artist has an image, use artist image as cover
         const finalCover = cover_url || artistImg || null;
 
         const result = await pool.query(
@@ -46,9 +44,9 @@ exports.uploadSong = async(req, res) => {
             ]
         );
 
-        // Return song with artist name included
         const song = result.rows[0];
-        res.status(201).json({...song, artist_name: artistName ? .trim() || null });
+        const cleanName = artistName ? artistName.trim() : null;
+        res.status(201).json(Object.assign({}, song, { artist_name: cleanName }));
 
     } catch (err) {
         console.error('Upload song error:', err);
@@ -86,16 +84,14 @@ exports.getSong = async(req, res) => {
 
         if (!result.rows[0]) return res.status(404).json({ error: 'Song not found' });
 
-        // Increment play count
         await pool.query(
             'UPDATE songs SET play_count = play_count + 1 WHERE id = $1', [req.params.id]
         );
 
-        // Record in listening history (non-critical)
         if (req.userId) {
             await pool.query(
                 'INSERT INTO listening_history (user_id, song_id) VALUES ($1, $2)', [req.userId, req.params.id]
-            ).catch(() => {});
+            ).catch(function() {});
         }
 
         res.json(result.rows[0]);
@@ -114,11 +110,11 @@ exports.searchSongs = async(req, res) => {
             `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
        FROM songs s
        LEFT JOIN artists a ON s.artist_id = a.id
-       WHERE s.title    ILIKE $1
-          OR a.name     ILIKE $1
-          OR s.genre    ILIKE $1
+       WHERE s.title ILIKE $1
+          OR a.name  ILIKE $1
+          OR s.genre ILIKE $1
        ORDER BY s.play_count DESC
-       LIMIT 50`, [`%${q.trim()}%`]
+       LIMIT 50`, ['%' + q.trim() + '%']
         );
         res.json(result.rows);
     } catch (err) {
@@ -139,7 +135,7 @@ exports.getRecommendations = async(req, res) => {
        LIMIT 3`, [req.userId]
         );
 
-        const genres = historyResult.rows.map(r => r.genre);
+        const genres = historyResult.rows.map(function(r) { return r.genre; });
         let songs;
 
         if (genres.length > 0) {
@@ -153,7 +149,6 @@ exports.getRecommendations = async(req, res) => {
             );
         }
 
-        // Fallback: most played songs
         if (!songs || songs.rows.length === 0) {
             songs = await pool.query(
                 `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
