@@ -1,21 +1,19 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
 });
 
-exports.sendResetEmail = async (toEmail, token) => {
-  const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
-
-  await transporter.sendMail({
-    from: `"VibeOrbit" <${process.env.EMAIL_USER}>`,
-    to: toEmail,
-    subject: 'VibeOrbit — Reset Your Password',
-    html: `
+exports.sendResetEmail = async(toEmail, resetUrl) => {
+    await transporter.sendMail({
+        from: 'VibeOrbit Support <vibeorbitsupport@gmail.com>',
+        to: toEmail,
+        subject: 'VibeOrbit — Reset Your Password',
+        html: `
       <!DOCTYPE html>
       <html>
       <head><meta charset="UTF-8"></head>
@@ -24,7 +22,6 @@ exports.sendResetEmail = async (toEmail, token) => {
           <tr><td align="center">
             <table width="560" cellpadding="0" cellspacing="0"
               style="background:#000;border-radius:12px;overflow:hidden;">
-              <!-- Header -->
               <tr>
                 <td style="padding:40px 40px 20px;">
                   <h1 style="color:#fff;font-size:28px;margin:0;font-weight:900;letter-spacing:-1px;">
@@ -33,7 +30,6 @@ exports.sendResetEmail = async (toEmail, token) => {
                   <p style="color:#666;font-size:12px;margin:4px 0 0;">Music. Your way.</p>
                 </td>
               </tr>
-              <!-- Body -->
               <tr>
                 <td style="padding:20px 40px 40px;">
                   <h2 style="color:#fff;font-size:22px;margin:0 0 16px;">Reset Your Password</h2>
@@ -65,5 +61,5 @@ exports.sendResetEmail = async (toEmail, token) => {
       </body>
       </html>
     `,
-  });
+    });
 };
