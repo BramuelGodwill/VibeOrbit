@@ -79,7 +79,7 @@ router.post('/mpesa', authMiddleware, async(req, res) => {
         const response = await collection.mpesaStkPush({
             first_name: firstName || 'VibeOrbit',
             last_name: 'User',
-            email: email || 'user@vibeorbit.com',
+            email: email || 'vibeorbitsupport@gmail.com',
             host: 'https://vibeorbit.vercel.app',
             amount: amount || 10,
             phone_number: formattedPhone,
