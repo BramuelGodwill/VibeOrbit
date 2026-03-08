@@ -15,16 +15,22 @@ if (typeof window !== 'undefined') {
       .catch(() => {});
   };
   ping();
-  setInterval(ping, 10 * 60 * 1000); // every 10 minutes
+  setInterval(ping, 10 * 60 * 1000);
 }
 
-const AUTH_PAGES = ['/login', '/signup', '/forgot-password', '/reset-password'];
+const AUTH_PAGES = [
+  '/login',
+  '/signup',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email',
+];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const pathname        = usePathname();
-  const router          = useRouter();
+  const pathname            = usePathname();
+  const router              = useRouter();
   const { isAuthenticated } = useAuthStore();
-  const isAuthPage      = AUTH_PAGES.some((p) => pathname.startsWith(p));
+  const isAuthPage          = AUTH_PAGES.some((p) => pathname.startsWith(p));
 
   useEffect(() => {
     if (!isAuthPage && !isAuthenticated()) {
@@ -56,13 +62,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div className="max-w-6xl mx-auto">{children}</div>
               </main>
             </div>
-
             {/* MOBILE */}
             <div className="md:hidden min-h-screen pb-40">
               <main className="px-4 pt-5">{children}</main>
               <MobileNav />
             </div>
-
             <PlayerBar />
           </>
         )}
@@ -71,4 +75,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
-
