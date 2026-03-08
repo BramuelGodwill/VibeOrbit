@@ -42,16 +42,17 @@ export default function ProfilePage() {
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Reset input so same file can be re-selected
     e.target.value = '';
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append('avatar', file);
-      const { data } = await api.post('/users/avatar', fd, {
+      await api.post('/users/avatar', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setUser(Object.assign({}, user, { avatar_url: data.avatar_url }));
+      // Re-fetch full profile from DB so avatar persists across navigation
+      const me = await api.get('/users/me');
+      setUser(me.data);
     } catch {
       alert('Avatar upload failed. Try again.');
     } finally {
@@ -91,7 +92,7 @@ export default function ProfilePage() {
         phone:     cleaned,
         amount:    10,
         firstName: user?.username || 'User',
-        email:     user?.email    || 'user@vibeorbit.com',
+        email:     user?.email    || 'vibeorbitsupport@gmail.com',
       });
       setPayMsg(data.message || 'Check your phone for the M-Pesa prompt!');
       setPhone('');
@@ -184,7 +185,6 @@ export default function ProfilePage() {
 
           {/* Name + email */}
           <div className="min-w-0 flex-1">
-            {/* Editable username */}
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               {editName ? (
                 <div className="flex items-center gap-2 flex-1">
@@ -192,7 +192,10 @@ export default function ProfilePage() {
                     type="text"
                     value={newName}
                     onChange={e => setNewName(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setEditName(false); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter')  handleSaveName();
+                      if (e.key === 'Escape') setEditName(false);
+                    }}
                     autoFocus
                     className="flex-1 min-w-0 bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-sm font-bold outline-none"
                     style={{ maxWidth: 160 }}
