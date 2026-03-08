@@ -1,16 +1,12 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 exports.sendResetEmail = async(toEmail, resetUrl) => {
-    await transporter.sendMail({
-        from: 'VibeOrbit Support <vibeorbitsupport@gmail.com>',
+    console.log('Sending reset email to:', toEmail);
+
+    const { data, error } = await resend.emails.send({
+        from: 'VibeOrbit <onboarding@resend.dev>',
         to: toEmail,
         subject: 'VibeOrbit — Reset Your Password',
         html: `
@@ -46,11 +42,10 @@ exports.sendResetEmail = async(toEmail, resetUrl) => {
                   </a>
                   <p style="color:#555;font-size:12px;margin:28px 0 0;line-height:1.6;">
                     If you did not request a password reset, you can safely ignore this email.
-                    Your password will not be changed.
                   </p>
                   <hr style="border:none;border-top:1px solid #222;margin:24px 0;">
                   <p style="color:#444;font-size:11px;margin:0;">
-                    If the button does not work, copy this link into your browser:<br>
+                    If the button does not work, copy this link:<br>
                     <span style="color:#888;word-break:break-all;">${resetUrl}</span>
                   </p>
                 </td>
@@ -62,4 +57,11 @@ exports.sendResetEmail = async(toEmail, resetUrl) => {
       </html>
     `,
     });
+
+    if (error) {
+        console.error('Resend error:', error);
+        throw new Error(error.message);
+    }
+
+    console.log('Email sent successfully:', data);
 };
