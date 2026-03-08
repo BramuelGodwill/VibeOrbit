@@ -61,15 +61,12 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log('🚀 VibeOrbit backend running on port ' + PORT);
 
-    // Self-ping every 10 minutes to prevent Render free tier from sleeping
-    const backendUrl = process.env.RENDER_EXTERNAL_URL || ('http://localhost:' + PORT);
+    // Self-ping every 5 minutes
     setInterval(() => {
-        const http = require('http');
         const https = require('https');
-        const url = backendUrl + '/health';
-        const client = url.startsWith('https') ? https : http;
-        client.get(url, (res) => {
-            console.log('Self-ping OK:', res.statusCode);
+        const url = (process.env.RENDER_EXTERNAL_URL || 'https://localhost:' + PORT) + '/health';
+        https.get(url, (res) => {
+            console.log('Self-ping:', res.statusCode);
         }).on('error', () => {});
-    }, 10 * 60 * 1000); // every 10 minutes
+    }, 5 * 60 * 1000);
 });
