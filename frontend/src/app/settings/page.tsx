@@ -409,7 +409,7 @@ export default function SettingsPage() {
       </Section>
 
       <p className="text-center text-xs text-white/15 mt-8">
-        VibeOrbit v2.1.0 — Made with ❤️ by Bramuel Godwill
+        VibeOrbit v2.1.0 — Made by Bramuel Godwill
       </p>
     </div>
   );
