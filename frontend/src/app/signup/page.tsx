@@ -23,8 +23,12 @@ export default function SignupPage() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/register', { email, username, password });
-      setAuth(data.token, data.user);
-      router.push('/');
+if (data.requiresVerification) {
+  router.push('/verify-email?email=' + encodeURIComponent(email));
+} else {
+  setAuth(data.token, data.user);
+  router.push('/');
+}
     } catch (err: any) {
       if (!err.response) {
         setError('Cannot reach server. Wait 30 seconds and try again.');

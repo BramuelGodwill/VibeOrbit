@@ -24,6 +24,11 @@ export default function LoginPage() {
       setAuth(data.token, data.user);
       router.push('/');
     } catch (err: any) {
+      // Unverified email — redirect to verify page
+      if (err.response?.data?.requiresVerification) {
+        router.push('/verify-email?email=' + encodeURIComponent(email));
+        return;
+      }
       if (!err.response) {
         setError('Cannot reach server. Wait 30 seconds and try again.');
       } else {
@@ -45,7 +50,6 @@ export default function LoginPage() {
           <p className="text-[11px] text-white/30">Music. Your way.</p>
         </div>
       </div>
-
       <h2 className="text-2xl font-bold mb-1">Sign in</h2>
       <p className="text-white/40 text-sm mb-6">Welcome back</p>
 
@@ -57,8 +61,13 @@ export default function LoginPage() {
         )}
         <div>
           <label className="block text-xs text-white/40 mb-1.5 font-medium">Email</label>
-          <input type="email" placeholder="you@example.com"
-            value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+          />
         </div>
         <div>
           <label className="block text-xs text-white/40 mb-1.5 font-medium">Password</label>
@@ -67,11 +76,13 @@ export default function LoginPage() {
               type={showPass ? 'text' : 'password'}
               placeholder="Enter your password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
               required
               className="pr-12"
             />
-            <button type="button" onClick={() => setShowPass(!showPass)}
+            <button
+              type="button"
+              onClick={() => setShowPass(!showPass)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors p-1">
               {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
@@ -83,12 +94,15 @@ export default function LoginPage() {
       </form>
 
       <div className="mt-6 space-y-3 text-center">
-        <Link href="/forgot-password" className="block text-sm text-white/30 hover:text-white transition-colors">
+        <Link href="/forgot-password"
+          className="block text-sm text-white/30 hover:text-white transition-colors">
           Forgot your password?
         </Link>
         <p className="text-sm text-white/40">
           No account?{' '}
-          <Link href="/signup" className="text-white hover:underline font-medium">Sign up free</Link>
+          <Link href="/signup" className="text-white hover:underline font-medium">
+            Sign up free
+          </Link>
         </p>
       </div>
     </div>
