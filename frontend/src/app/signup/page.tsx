@@ -23,12 +23,12 @@ export default function SignupPage() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/register', { email, username, password });
-if (data.requiresVerification) {
-  router.push('/verify-email?email=' + encodeURIComponent(email));
-} else {
-  setAuth(data.token, data.user);
-  router.push('/');
-}
+      if (data.requiresVerification) {
+        router.push('/verify-email?email=' + encodeURIComponent(email));
+      } else {
+        setAuth(data.token, data.user);
+        router.push('/');
+      }
     } catch (err: any) {
       if (!err.response) {
         setError('Cannot reach server. Wait 30 seconds and try again.');
@@ -42,6 +42,8 @@ if (data.requiresVerification) {
 
   return (
     <div className="w-full max-w-sm">
+
+      {/* Logo */}
       <div className="flex items-center gap-2 mb-8">
         <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
           <Music2 size={18} className="text-black" />
@@ -61,16 +63,30 @@ if (data.requiresVerification) {
             {error}
           </div>
         )}
+
         <div>
           <label className="block text-xs text-white/40 mb-1.5 font-medium">Email</label>
-          <input type="email" placeholder="you@example.com"
-            value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+          />
         </div>
+
         <div>
           <label className="block text-xs text-white/40 mb-1.5 font-medium">Username</label>
-          <input type="text" placeholder="cooluser123"
-            value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} />
+          <input
+            type="text"
+            placeholder="cooluser123"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            required
+            minLength={3}
+          />
         </div>
+
         <div>
           <label className="block text-xs text-white/40 mb-1.5 font-medium">Password</label>
           <div className="relative">
@@ -78,24 +94,44 @@ if (data.requiresVerification) {
               type={showPass ? 'text' : 'password'}
               placeholder="Min. 6 characters"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required minLength={6}
+              onChange={e => setPassword(e.target.value)}
+              required
+              minLength={6}
               className="pr-12"
             />
-            <button type="button" onClick={() => setShowPass(!showPass)}
+            <button
+              type="button"
+              onClick={() => setShowPass(!showPass)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors p-1">
               {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         </div>
+
+        {/* Info box */}
+        <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-3">
+          <p className="text-xs text-white/40 leading-relaxed">
+            📧 After signing up, we will send a <span className="text-white/70 font-medium">6-digit verification code</span> to your email. Check your inbox and spam folder.
+          </p>
+        </div>
+
         <button type="submit" disabled={loading} className="btn-primary">
-          {loading ? 'Creating account...' : 'Create Account'}
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+              Sending verification code...
+            </span>
+          ) : (
+            'Create Account'
+          )}
         </button>
       </form>
 
       <p className="mt-6 text-sm text-white/40 text-center">
         Already have an account?{' '}
-        <Link href="/login" className="text-white hover:underline font-medium">Sign in</Link>
+        <Link href="/login" className="text-white hover:underline font-medium">
+          Sign in
+        </Link>
       </p>
     </div>
   );
