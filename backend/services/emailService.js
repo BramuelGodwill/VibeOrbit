@@ -1,15 +1,13 @@
-const { Resend } = require('resend');
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+const https = require('https');
 
 exports.sendResetEmail = async(toEmail, resetUrl) => {
     console.log('Sending reset email to:', toEmail);
 
-    const { data, error } = await resend.emails.send({
-        from: 'VibeOrbit <onboarding@resend.dev>',
-        to: toEmail,
+    const payload = JSON.stringify({
+        sender: { name: 'VibeOrbit', email: 'vibeorbitsupport@gmail.com' },
+        to: [{ email: toEmail }],
         subject: 'VibeOrbit — Reset Your Password',
-        html: `
+        htmlContent: `
       <!DOCTYPE html>
       <html>
       <head><meta charset="UTF-8"></head>
@@ -58,10 +56,32 @@ exports.sendResetEmail = async(toEmail, resetUrl) => {
     `,
     });
 
-    if (error) {
-        console.error('Resend error:', error);
-        throw new Error(error.message);
-    }
+    await new Promise((resolve, reject) => {
+        const req = https.request({
+            hostname: 'api.brevo.com',
+            path: '/v3/smtp/email',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': process.env.BREVO_API_KEY,
+                'Content-Length': Buffer.byteLength(payload),
+            },
+        }, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+                console.log('Brevo response:', res.statusCode, body);
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    resolve(body);
+                } else {
+                    reject(new Error('Brevo error: ' + body));
+                }
+            });
+        });
+        req.on('error', reject);
+        req.write(payload);
+        req.end();
+    });
 
-    console.log('Email sent successfully:', data);
+    console.log('Email sent successfully to:', toEmail);
 };
