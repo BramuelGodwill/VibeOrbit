@@ -148,7 +148,11 @@ export default function SettingsPage() {
           <div className="space-y-2">
             {(['low', 'normal', 'high'] as Quality[]).map(q => (
               <button key={q}
-                onClick={() => { setQuality(q); localStorage.setItem('vb_quality', q); flash('Saved'); }}
+                onClick={() => {
+                  setQuality(q);
+                  localStorage.setItem('vb_quality', q);
+                  flash('Saved');
+                }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all ${
                   quality === q
                     ? 'border-white/30 bg-white/10'
@@ -200,31 +204,47 @@ export default function SettingsPage() {
             <p className="text-xs text-white/40">{user?.email}</p>
           </div>
         </div>
-        <LinkRow icon={<Lock size={16} />}   label="Change Password"
-          sub="Update your password"
-          onClick={() => router.push('/forgot-password')} />
-        <LinkRow icon={<Globe size={16} />}  label="Language"
+        <LinkRow
+          icon={<Lock size={16} />}
+          label="Change Password"
+          sub="Update your account password"
+          onClick={() => router.push('/forgot-password')}
+        />
+        <LinkRow
+          icon={<Globe size={16} />}
+          label="Language"
           sub="English"
-          onClick={() => flash('Coming soon')} />
+          onClick={() => flash('Coming soon')}
+        />
       </Section>
 
       {/* ── SUPPORT ── */}
       <Section title="Support">
-        <LinkRow icon={<HelpCircle size={16} />} label="Help Center"
+        <LinkRow
+          icon={<HelpCircle size={16} />}
+          label="Help Center"
           sub="FAQs and guides"
-          onClick={() => window.open('mailto:support@vibeorbit.com')} />
-        <LinkRow icon={<Mail size={16} />}       label="Contact Us"
-          sub="support@vibeorbit.com"
-          onClick={() => window.open('mailto:support@vibeorbit.com')} />
-        <LinkRow icon={<Shield size={16} />}     label="Privacy Policy"
+          onClick={() => window.open('mailto:vibeorbitsupport@gmail.com')}
+        />
+        <LinkRow
+          icon={<Mail size={16} />}
+          label="Contact Us"
+          sub="vibeorbitsupport@gmail.com"
+          onClick={() => window.open('mailto:vibeorbitsupport@gmail.com')}
+        />
+        <LinkRow
+          icon={<Shield size={16} />}
+          label="Privacy Policy"
           sub="How we handle your data"
-          onClick={() => flash('Coming soon')} />
+          onClick={() => flash('Coming soon')}
+        />
       </Section>
 
       {/* ── ACCOUNT ACTIONS ── */}
       <Section title="Account Actions">
-        <button onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 transition-colors rounded-xl">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 active:bg-red-400/20 transition-colors rounded-xl">
           <LogOut size={16} />
           <div className="text-left">
             <p className="text-sm font-medium">Log out</p>
@@ -232,18 +252,20 @@ export default function SettingsPage() {
           </div>
         </button>
         <button
-          onClick={() => flash('Contact support@vibeorbit.com to delete your account')}
-          className="w-full flex items-center gap-3 px-4 py-3 text-red-400/50 hover:bg-red-400/5 transition-colors rounded-xl border-t border-white/[0.04]">
+          onClick={() => window.open('mailto:vibeorbitsupport@gmail.com?subject=Delete My Account')}
+          className="w-full flex items-center gap-3 px-4 py-3 text-red-400/50 hover:bg-red-400/5 active:bg-red-400/10 transition-colors rounded-xl border-t border-white/[0.04]">
           <Trash2 size={16} />
           <div className="text-left">
             <p className="text-sm font-medium">Delete Account</p>
-            <p className="text-xs text-red-400/40">Permanently remove your account</p>
+            <p className="text-xs text-red-400/40">
+              Email vibeorbitsupport@gmail.com to delete
+            </p>
           </div>
         </button>
       </Section>
 
       <p className="text-center text-xs text-white/15 mt-8">
-        VibeOrbit v1.0.0 — Made by Bramuel Godwill
+        VibeOrbit v2.1.0 — Made by Bramuel Godwill
       </p>
     </div>
   );
@@ -265,12 +287,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function ToggleRow({ icon, label, sub, value, onChange, border = false }: {
-  icon: React.ReactNode;
-  label: string;
-  sub: string;
-  value: boolean;
+  icon:     React.ReactNode;
+  label:    string;
+  sub:      string;
+  value:    boolean;
   onChange: (v: boolean) => void;
-  border?: boolean;
+  border?:  boolean;
 }) {
   return (
     <div className={`flex items-center justify-between px-4 py-3 ${
@@ -297,14 +319,15 @@ function ToggleRow({ icon, label, sub, value, onChange, border = false }: {
 }
 
 function LinkRow({ icon, label, sub, onClick }: {
-  icon: React.ReactNode;
-  label: string;
-  sub: string;
+  icon:    React.ReactNode;
+  label:   string;
+  sub:     string;
   onClick: () => void;
 }) {
   return (
-    <button onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.04] transition-colors border-t border-white/[0.04] first:border-0">
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.04] active:bg-white/10 transition-colors border-t border-white/[0.04] first:border-0">
       <span className="text-white/40 shrink-0">{icon}</span>
       <div className="text-left flex-1">
         <p className="text-sm font-medium">{label}</p>
