@@ -49,9 +49,7 @@ router.post('/avatar', authMiddleware, (req, res) => {
         if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
         try {
             const avatar_url = req.file.path;
-            await pool.query(
-                'UPDATE users SET avatar_url=$1 WHERE id=$2', [avatar_url, req.userId]
-            );
+            await pool.query('UPDATE users SET avatar_url=$1 WHERE id=$2', [avatar_url, req.userId]);
             res.json({ avatar_url });
         } catch (err) {
             res.status(500).json({ error: 'Failed to save avatar' });
@@ -59,7 +57,6 @@ router.post('/avatar', authMiddleware, (req, res) => {
     });
 });
 
-// ── GET listening history ─────────────────────────────────────────────────
 // ── LIKE a song ───────────────────────────────────────────────────────────
 router.post('/likes/:songId', authMiddleware, async(req, res) => {
     try {
@@ -84,7 +81,7 @@ router.delete('/likes/:songId', authMiddleware, async(req, res) => {
     }
 });
 
-// ── GET user's liked songs ────────────────────────────────────────────────
+// ── GET liked songs ───────────────────────────────────────────────────────
 router.get('/likes', authMiddleware, async(req, res) => {
     try {
         const result = await pool.query(
@@ -101,7 +98,51 @@ router.get('/likes', authMiddleware, async(req, res) => {
     }
 });
 
+// ── GET listening history ─────────────────────────────────────────────────
+router.get('/history', authMiddleware, async(req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT DISTINCT ON (s.id) s.*, a.name AS artist_name, a.image_url AS artist_image
+       FROM listening_history lh
+       JOIN songs s ON lh.song_id = s.id
+       LEFT JOIN artists a ON s.artist_id = a.id
+       WHERE lh.user_id = $1
+       ORDER BY s.id, lh.played_at DESC
+       LIMIT 20`, [req.userId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch history' });
+    }
+});
 
+// ── SAVE onboarding preferences ───────────────────────────────────────────
+router.post('/preferences', authMiddleware, async(req, res) => {
+    const { genres, artist_names } = req.body;
+    try {
+        await pool.query(
+            `INSERT INTO user_preferences (user_id, genres, artist_ids, completed)
+       VALUES ($1, $2, $3, true)
+       ON CONFLICT (user_id)
+       DO UPDATE SET genres = $2, artist_ids = $3, completed = true`, [req.userId, genres || [], artist_names || []]
+        );
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('Preferences error:', err);
+        res.status(500).json({ error: 'Failed to save preferences' });
+    }
+});
 
+// ── GET onboarding status ─────────────────────────────────────────────────
+router.get('/preferences', authMiddleware, async(req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT completed FROM user_preferences WHERE user_id = $1', [req.userId]
+        );
+        res.json({ completed: result.rows[0] ? .completed || false });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch preferences' });
+    }
+});
 
 module.exports = router;
