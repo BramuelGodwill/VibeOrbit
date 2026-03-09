@@ -88,5 +88,29 @@ router.post('/play', async(req, res) => {
     }
 });
 
+// ── Top played Deezer songs ───────────────────────────────────────────────
+router.get('/top-plays', async(req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT 
+        ('dz_' || deezer_id) AS id,
+        title,
+        artist_name,
+        cover_url,
+        audio_url,
+        play_count,
+        'deezer' AS source
+       FROM deezer_plays
+       ORDER BY play_count DESC
+       LIMIT 20`
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Deezer top plays error:', err);
+        res.status(500).json({ error: 'Failed to fetch top plays' });
+    }
+});
+
+
 
 module.exports = router;
