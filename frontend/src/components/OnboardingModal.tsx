@@ -39,9 +39,9 @@ export default function OnboardingModal() {
       .catch(() => {});
   }, [user]);
 
-  const availableArtists = [...new Set(
-    selectedGenres.flatMap(g => GENRE_ARTISTS[g] || [])
-  )];
+  const availableArtists = selectedGenres
+  .flatMap(g => GENRE_ARTISTS[g] || [])
+  .filter((a, i, arr) => arr.indexOf(a) === i);
 
   const toggleGenre = (g: string) => {
     setSelectedGenres(prev =>
