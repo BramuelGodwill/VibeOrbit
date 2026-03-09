@@ -92,17 +92,20 @@ export default function HomePage() {
   const [genre,       setGenre]       = useState('All');
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
+  const [greeting,    setGreeting]    = useState('Good morning');
   const { setQueue }                  = usePlayerStore();
   const { user }                      = useAuthStore();
 
-  const hour     = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  // ── Set greeting client-side only to avoid hydration mismatch ──
+  useEffect(() => {
+    const hour = new Date().getHours();
+    setGreeting(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
+  }, []);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      // ── fetch songs — handle both { songs: [] } and plain [] ──
-      const songsRes = await api.get('/songs');
+      const songsRes     = await api.get('/songs');
       const songs: any[] = Array.isArray(songsRes.data)
         ? songsRes.data
         : (songsRes.data.songs || []);
@@ -110,11 +113,9 @@ export default function HomePage() {
       setAllSongs(songs);
       setQueue(songs);
 
-      // Popular = sorted by play_count
       const sorted = [...songs].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
       setPopular(sorted.slice(0, 10));
 
-      // Top Mixes = personalised recommendations
       try {
         const recRes    = await api.get('/songs/recommendations');
         const recData   = Array.isArray(recRes.data)
@@ -126,7 +127,6 @@ export default function HomePage() {
         setRecommended(sorted.slice(0, 10));
       }
 
-      // Liked songs
       try {
         const likesRes    = await api.get('/users/likes');
         const likesData   = Array.isArray(likesRes.data)
@@ -138,7 +138,6 @@ export default function HomePage() {
         setLikedSongs([]);
       }
 
-      // Jump back in = last 2 played songs
       try {
         const histRes  = await api.get('/users/history');
         const histData = Array.isArray(histRes.data)
@@ -308,9 +307,9 @@ export default function HomePage() {
                 onClick={() => usePlayerStore.getState().playSong(s, popular)}
                 className="group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/[0.06] active:bg-white/10 transition-all">
                 <span className={`text-sm font-black w-5 text-right shrink-0 ${
-                  i === 0 ? 'text-yellow-400'      :
-                  i === 1 ? 'text-white/50'         :
-                  i === 2 ? 'text-orange-400/70'    :
+                  i === 0 ? 'text-yellow-400'   :
+                  i === 1 ? 'text-white/50'      :
+                  i === 2 ? 'text-orange-400/70' :
                             'text-white/20'
                 }`}>{i + 1}</span>
                 <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 shrink-0">
