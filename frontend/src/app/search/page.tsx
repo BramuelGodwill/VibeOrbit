@@ -21,13 +21,13 @@ const toArray = (data: any): Song[] =>
 
 export default function SearchPage() {
   const { currentSong, isPlaying, playSong, togglePlay } = usePlayerStore();
-  const [query,        setQuery]        = useState('');
-  const [results,      setResults]      = useState<Song[]>([]);
-  const [myMusic,      setMyMusic]      = useState<Song[]>([]);
-  const [allMyMusic,   setAllMyMusic]   = useState<Song[]>([]); // full unfiltered list
-  const [allTrending,  setAllTrending]  = useState<Song[]>([]); // full unfiltered deezer
-  const [loading,      setLoading]      = useState(false);
-  const [tab,          setTab]          = useState<'all' | 'vibeorbit' | 'deezer'>('all');
+  const [query,       setQuery]       = useState('');
+  const [deezerSongs, setDeezerSongs] = useState<Song[]>([]);
+  const [myMusic,     setMyMusic]     = useState<Song[]>([]);
+  const [allMyMusic,  setAllMyMusic]  = useState<Song[]>([]);
+  const [allTrending, setAllTrending] = useState<Song[]>([]);
+  const [loading,     setLoading]     = useState(false);
+  const [tab,         setTab]         = useState<'all' | 'vibeorbit' | 'deezer'>('all');
   const debounceRef = useRef<NodeJS.Timeout>();
 
   // Load both sources on mount
@@ -38,7 +38,7 @@ export default function SearchPage() {
     ]).then(([deezerRes, myRes]) => {
       const dz = deezerRes.status === 'fulfilled' ? toArray(deezerRes.value.data) : [];
       const my = myRes.status    === 'fulfilled'  ? toArray(myRes.value.data)     : [];
-      setResults(dz);
+      setDeezerSongs(dz);
       setMyMusic(my);
       setAllTrending(dz);
       setAllMyMusic(my);
@@ -50,8 +50,7 @@ export default function SearchPage() {
     clearTimeout(debounceRef.current);
 
     if (!value.trim()) {
-      // Restore defaults when search is cleared
-      setResults(allTrending);
+      setDeezerSongs(allTrending);
       setMyMusic(allMyMusic);
       return;
     }
@@ -63,23 +62,23 @@ export default function SearchPage() {
           api.get('/deezer/search?q=' + encodeURIComponent(value) + '&limit=20'),
           api.get('/songs?search='    + encodeURIComponent(value)),
         ]);
-        setResults(deezerRes.status === 'fulfilled' ? toArray(deezerRes.value.data) : []);
-        setMyMusic(myRes.status    === 'fulfilled'  ? toArray(myRes.value.data)     : []);
+        setDeezerSongs(deezerRes.status === 'fulfilled' ? toArray(deezerRes.value.data) : []);
+        setMyMusic(myRes.status        === 'fulfilled'  ? toArray(myRes.value.data)     : []);
       } catch {}
       finally { setLoading(false); }
     }, 400);
   };
 
   const handlePlay = (song: Song, queue: Song[]) => {
-    if (currentSong?.id === song.id) {
-      togglePlay();
-    } else {
-      playSong(song as any, queue as any);
-    }
+    if (currentSong?.id === song.id) togglePlay();
+    else playSong(song as any, queue as any);
   };
 
-  const displayDeezer    = tab === 'all' || tab === 'deezer';
-  const displayVibeOrbit = tab === 'all' || tab === 'vibeorbit';
+  // Combined list for "All" tab — VibeOrbit first, then Deezer
+  const combinedQueue = [...myMusic, ...deezerSongs];
+
+  const isEmpty = !loading && query &&
+    deezerSongs.length === 0 && myMusic.length === 0;
 
   return (
     <div className="max-w-3xl mx-auto pb-10">
@@ -109,70 +108,114 @@ export default function SearchPage() {
           { key: 'vibeorbit', label: 'VibeOrbit' },
           { key: 'deezer',    label: '🌍 Deezer' },
         ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key as any)}
+          <button key={t.key} onClick={() => setTab(t.key as any)}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
               tab === t.key
                 ? 'bg-white text-black'
                 : 'bg-white/[0.06] text-white/50 hover:text-white'
-            }`}
-          >
+            }`}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* ── VibeOrbit results ── */}
-      {displayVibeOrbit && myMusic.length > 0 && (
-        <section className="mb-8">
+      {/* ── ALL TAB — VibeOrbit section then Deezer section ── */}
+      {tab === 'all' && !isEmpty && (
+        <>
+          {myMusic.length > 0 && (
+            <section className="mb-8">
+              <h2 className="text-xs text-white/30 uppercase tracking-widest font-semibold mb-3 px-1">
+                On VibeOrbit
+              </h2>
+              <div className="space-y-1">
+                {myMusic.map(song => (
+                  <SongRow
+                    key={song.id} song={song}
+                    isActive={currentSong?.id === song.id}
+                    isPlaying={currentSong?.id === song.id && isPlaying}
+                    onPlay={() => handlePlay(song, combinedQueue)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {deezerSongs.length > 0 && (
+            <section>
+              <h2 className="text-xs text-white/30 uppercase tracking-widest font-semibold mb-3 px-1 flex items-center gap-2">
+                <Radio size={12} />
+                {query ? 'Deezer Results' : 'Trending on Deezer'}
+                <span className="text-white/15 normal-case tracking-normal font-normal">— 30s previews</span>
+              </h2>
+              <div className="space-y-1">
+                {deezerSongs.map(song => (
+                  <SongRow
+                    key={song.id} song={song}
+                    isActive={currentSong?.id === song.id}
+                    isPlaying={currentSong?.id === song.id && isPlaying}
+                    onPlay={() => handlePlay(song, combinedQueue)}
+                    isDeezer
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {/* ── VIBEORBIT TAB ── */}
+      {tab === 'vibeorbit' && (
+        <section>
           <h2 className="text-xs text-white/30 uppercase tracking-widest font-semibold mb-3 px-1">
             On VibeOrbit
           </h2>
-          <div className="space-y-1">
-            {myMusic.map(song => (
-              <SongRow
-                key={song.id}
-                song={song}
-                isActive={currentSong?.id === song.id}
-                isPlaying={currentSong?.id === song.id && isPlaying}
-                onPlay={() => handlePlay(song, myMusic)}
-              />
-            ))}
-          </div>
+          {myMusic.length === 0 && !loading ? (
+            <p className="text-white/20 text-sm text-center py-8">
+              {query ? 'No VibeOrbit results' : 'No songs yet'}
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {myMusic.map(song => (
+                <SongRow
+                  key={song.id} song={song}
+                  isActive={currentSong?.id === song.id}
+                  isPlaying={currentSong?.id === song.id && isPlaying}
+                  onPlay={() => handlePlay(song, myMusic)}
+                />
+              ))}
+            </div>
+          )}
         </section>
       )}
 
-      {/* ── Deezer results ── */}
-      {displayDeezer && (
+      {/* ── DEEZER TAB ── */}
+      {tab === 'deezer' && (
         <section>
           <h2 className="text-xs text-white/30 uppercase tracking-widest font-semibold mb-3 px-1 flex items-center gap-2">
             <Radio size={12} />
             {query ? 'Deezer Results' : 'Trending on Deezer'}
-            <span className="text-white/15 normal-case tracking-normal font-normal">
-              — 30s previews
-            </span>
+            <span className="text-white/15 normal-case tracking-normal font-normal">— 30s previews</span>
           </h2>
-          {results.length === 0 && !loading && (
+          {deezerSongs.length === 0 && !loading ? (
             <p className="text-white/20 text-sm text-center py-8">No results found</p>
+          ) : (
+            <div className="space-y-1">
+              {deezerSongs.map(song => (
+                <SongRow
+                  key={song.id} song={song}
+                  isActive={currentSong?.id === song.id}
+                  isPlaying={currentSong?.id === song.id && isPlaying}
+                  onPlay={() => handlePlay(song, deezerSongs)}
+                  isDeezer
+                />
+              ))}
+            </div>
           )}
-          <div className="space-y-1">
-            {results.map(song => (
-              <SongRow
-                key={song.id}
-                song={song}
-                isActive={currentSong?.id === song.id}
-                isPlaying={currentSong?.id === song.id && isPlaying}
-                onPlay={() => handlePlay(song, results)}
-                isDeezer
-              />
-            ))}
-          </div>
         </section>
       )}
 
       {/* ── Empty state ── */}
-      {!loading && query && results.length === 0 && myMusic.length === 0 && (
+      {isEmpty && (
         <div className="text-center py-16 text-white/20">
           <Music2 size={32} className="mx-auto mb-3 opacity-40" />
           <p className="text-sm">No results for "{query}"</p>
@@ -198,8 +241,7 @@ function SongRow({
   const secs = String((song.duration || 0) % 60).padStart(2, '0');
 
   return (
-    <div
-      onClick={onPlay}
+    <div onClick={onPlay}
       className={`flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer touch-manipulation transition-colors ${
         isActive ? 'bg-white/10' : 'hover:bg-white/[0.05] active:bg-white/10'
       }`}
@@ -218,14 +260,12 @@ function SongRow({
           </div>
         )}
       </div>
-
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-medium truncate ${isActive ? 'text-white' : ''}`}>
           {song.title}
         </p>
         <p className="text-xs text-white/40 truncate">{song.artist_name}</p>
       </div>
-
       <div className="flex items-center gap-2 shrink-0">
         {isDeezer && (
           <span className="text-[10px] bg-purple-500/20 text-purple-300/70 px-2 py-0.5 rounded-full">
