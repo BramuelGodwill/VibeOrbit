@@ -25,34 +25,46 @@ const GENRE_ARTISTS: Record<string, string[]> = {
 
 export default function OnboardingModal() {
   const { user } = useAuthStore();
-  const [show,           setShow]           = useState(false);
-  const [step,           setStep]           = useState<1 | 2>(1);
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const [selectedArtists,setSelectedArtists]= useState<string[]>([]);
-  const [saving,         setSaving]         = useState(false);
+  const [show,            setShow]            = useState(false);
+  const [step,            setStep]            = useState<1 | 2>(1);
+  const [selectedGenres,  setSelectedGenres]  = useState<string[]>([]);
+  const [selectedArtists, setSelectedArtists] = useState<string[]>([]);
+  const [saving,          setSaving]          = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    // Check if onboarding already done
+
+    // Check localStorage first — if dismissed before, never show again
+    const key = `vb_onboarded_${user.id}`;
+    if (localStorage.getItem(key)) return;
+
+    // Otherwise check server
     api.get('/users/preferences')
-      .then(r => { if (!r.data.completed) setShow(true); })
+      .then(r => {
+        if (!r.data.completed) {
+          setShow(true);
+        } else {
+          // Already done on server — save locally so we skip API next time
+          localStorage.setItem(key, 'true');
+        }
+      })
       .catch(() => {});
   }, [user]);
 
   const availableArtists = selectedGenres
-  .flatMap(g => GENRE_ARTISTS[g] || [])
-  .filter((a, i, arr) => arr.indexOf(a) === i);
+    .flatMap(g => GENRE_ARTISTS[g] || [])
+    .filter((a, i, arr) => arr.indexOf(a) === i);
 
   const toggleGenre = (g: string) => {
     setSelectedGenres(prev =>
       prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]
     );
-    // Remove artists from deselected genre
     setSelectedArtists(prev =>
-      prev.filter(a => selectedGenres
-        .filter(x => x !== g)
-        .flatMap(x => GENRE_ARTISTS[x] || [])
-        .includes(a)
+      prev.filter(a =>
+        selectedGenres
+          .filter(x => x !== g)
+          .flatMap(x => GENRE_ARTISTS[x] || [])
+          .includes(a)
       )
     );
   };
@@ -67,28 +79,30 @@ export default function OnboardingModal() {
     setStep(2);
   };
 
+  const dismiss = () => {
+    if (user) localStorage.setItem(`vb_onboarded_${user.id}`, 'true');
+    setShow(false);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Find artist IDs from DB for selected artist names
       await api.post('/users/preferences', {
-        genres:     selectedGenres,
-        artist_ids: [],           // names stored in genres for recommendations
+        genres:       selectedGenres,
         artist_names: selectedArtists,
       });
-      setShow(false);
-    } catch {
-      setShow(false); // dismiss anyway
-    } finally {
+    } catch {}
+    finally {
       setSaving(false);
+      dismiss();
     }
   };
 
   const handleSkip = async () => {
     try {
-      await api.post('/users/preferences', { genres: [], artist_ids: [], artist_names: [] });
+      await api.post('/users/preferences', { genres: [], artist_names: [] });
     } catch {}
-    setShow(false);
+    dismiss();
   };
 
   if (!show) return null;
@@ -110,11 +124,10 @@ export default function OnboardingModal() {
           </h2>
           <p className="text-sm text-white/40 mt-1">
             {step === 1
-              ? 'Choose genres you love — we\'ll personalise your experience'
+              ? "Choose genres you love — we'll personalise your experience"
               : 'Select artists you enjoy — helps us recommend better music'
             }
           </p>
-          {/* Progress bar */}
           <div className="mt-4 h-1 bg-white/10 rounded-full overflow-hidden">
             <div
               className="h-full bg-white rounded-full transition-all duration-500"
@@ -191,12 +204,11 @@ export default function OnboardingModal() {
           ) : (
             <button onClick={handleSave} disabled={saving}
               className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold bg-white text-black hover:opacity-90 active:scale-95 transition-all">
-              {saving ? 'Saving...' : (
-                <><Sparkles size={14} /> Let\'s go!</>
-              )}
+              {saving ? 'Saving...' : <><Sparkles size={14} /> Let&apos;s go!</>}
             </button>
           )}
         </div>
+
       </div>
     </div>
   );
