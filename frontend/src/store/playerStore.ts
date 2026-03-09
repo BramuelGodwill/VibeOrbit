@@ -27,18 +27,35 @@ interface PlayerState {
   stop:        () => void;
 }
 
-// Only record plays for YOUR songs — not Deezer previews
+// Only record plays for all YOUR songs
 const recordPlay = (song: Song) => {
-  if (song.source === 'deezer') return; // skip Deezer songs
   try {
     const token   = typeof window !== 'undefined' ? localStorage.getItem('vb_token') : null;
     const apiUrl  = process.env.NEXT_PUBLIC_API_URL || '/api';
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = 'Bearer ' + token;
-    fetch(apiUrl + '/songs/' + song.id + '/play', {
-      method: 'POST',
-      headers,
-    }).catch(() => {});
+
+    if (song.source === 'deezer') {
+      // Track Deezer plays in a separate endpoint
+      fetch(apiUrl + '/deezer/play', {
+        method:  'POST',
+        headers,
+        body: JSON.stringify({
+          deezer_id:   song.deezer_id,
+          title:       song.title,
+          artist_name: song.artist_name,
+          cover_url:   song.cover_url,
+          audio_url:   song.audio_url,
+          album:       song.album,
+        }),
+      }).catch(() => {});
+    } else {
+      // Track your own songs
+      fetch(apiUrl + '/songs/' + song.id + '/play', {
+        method: 'POST',
+        headers,
+      }).catch(() => {});
+    }
   } catch {}
 };
 
