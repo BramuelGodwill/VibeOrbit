@@ -55,13 +55,18 @@ router.get('/', optionalAuth, async(req, res) => {
         let result;
         if (search && search.trim()) {
             result = await pool.query(
-                `SELECT * FROM songs
-         WHERE title ILIKE $1 OR artist_name ILIKE $1
-         ORDER BY play_count DESC, created_at DESC`, [`%${search.trim()}%`]
+                `SELECT s.*, a.name AS artist_name
+         FROM songs s
+         LEFT JOIN artists a ON a.id = s.artist_id
+         WHERE s.title ILIKE $1 OR a.name ILIKE $1
+         ORDER BY s.play_count DESC, s.created_at DESC`, [`%${search.trim()}%`]
             );
         } else {
             result = await pool.query(
-                'SELECT * FROM songs ORDER BY created_at DESC'
+                `SELECT s.*, a.name AS artist_name
+         FROM songs s
+         LEFT JOIN artists a ON a.id = s.artist_id
+         ORDER BY s.created_at DESC`
             );
         }
         res.json({ songs: result.rows });
