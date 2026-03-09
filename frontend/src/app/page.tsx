@@ -101,40 +101,50 @@ export default function HomePage() {
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      // Fetch all songs — play_count comes from backend
-      const songsRes     = await api.get('/songs');
-      const songs: any[] = songsRes.data;
+      // ── fetch songs — handle both { songs: [] } and plain [] ──
+      const songsRes = await api.get('/songs');
+      const songs: any[] = Array.isArray(songsRes.data)
+        ? songsRes.data
+        : (songsRes.data.songs || []);
+
       setAllSongs(songs);
       setQueue(songs);
 
-      // Popular = sorted by play_count (total plays by ALL users)
+      // Popular = sorted by play_count
       const sorted = [...songs].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
       setPopular(sorted.slice(0, 10));
 
-      // Top Mixes = personalised recommendations based on THIS user's listening history
+      // Top Mixes = personalised recommendations
       try {
-        const recRes = await api.get('/songs/recommendations');
-        // Sort recommendations by play_count too
-        const recSorted = [...recRes.data].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
+        const recRes    = await api.get('/songs/recommendations');
+        const recData   = Array.isArray(recRes.data)
+          ? recRes.data
+          : (recRes.data.songs || []);
+        const recSorted = [...recData].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
         setRecommended(recSorted.slice(0, 10));
       } catch {
         setRecommended(sorted.slice(0, 10));
       }
 
-      // Liked songs = songs this user pressed the heart button on
+      // Liked songs
       try {
-        const likesRes = await api.get('/users/likes');
-        // Sort liked songs by play count
-        const likesSorted = [...likesRes.data].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
+        const likesRes    = await api.get('/users/likes');
+        const likesData   = Array.isArray(likesRes.data)
+          ? likesRes.data
+          : (likesRes.data.songs || []);
+        const likesSorted = [...likesData].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
         setLikedSongs(likesSorted.slice(0, 10));
       } catch {
         setLikedSongs([]);
       }
 
-      // Jump back in = THIS user's last 2 played songs
+      // Jump back in = last 2 played songs
       try {
-        const histRes = await api.get('/users/history');
-        setRecent(histRes.data.slice(0, 2));
+        const histRes  = await api.get('/users/history');
+        const histData = Array.isArray(histRes.data)
+          ? histRes.data
+          : (histRes.data.songs || []);
+        setRecent(histData.slice(0, 2));
       } catch {
         setRecent([]);
       }
@@ -178,16 +188,14 @@ export default function HomePage() {
           {user && <p className="text-white/40 text-sm truncate">{user.username}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Refresh button — reload play counts */}
           <button
             onClick={() => load(true)}
             disabled={refreshing}
-            title="Refresh play counts"
+            title="Refresh"
             className="w-8 h-8 flex items-center justify-center rounded-full text-white/30 hover:text-white hover:bg-white/10 transition-all"
           >
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
           </button>
-
           {!user?.is_premium && (
             <Link href="/profile"
               className="flex items-center gap-1.5 bg-white text-black text-[11px] font-black px-3 py-1.5 rounded-full hover:opacity-90 active:scale-95 transition-all whitespace-nowrap">
@@ -226,7 +234,7 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* ── JUMP BACK IN — your last 2 played songs, side by side ── */}
+      {/* ── JUMP BACK IN ── */}
       {recent.length > 0 && genre === 'All' && (
         <section>
           <div className="flex items-center gap-2 mb-3">
@@ -254,7 +262,7 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── LIKED SONGS — only songs you pressed heart on ── */}
+      {/* ── LIKED SONGS ── */}
       {likedSongs.length > 0 && genre === 'All' && (
         <section>
           <div className="flex items-center justify-between mb-3">
@@ -270,7 +278,7 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── YOUR TOP MIXES — genres you listen to most, sorted by plays ── */}
+      {/* ── TOP MIXES ── */}
       {recommended.length > 0 && genre === 'All' && (
         <section>
           <div className="flex items-center gap-2 mb-1">
@@ -286,7 +294,7 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── POPULAR THIS WEEK — all users' total plays, ranked ── */}
+      {/* ── POPULAR THIS WEEK ── */}
       {popular.length > 0 && genre === 'All' && (
         <section>
           <div className="flex items-center gap-2 mb-1">
@@ -300,9 +308,9 @@ export default function HomePage() {
                 onClick={() => usePlayerStore.getState().playSong(s, popular)}
                 className="group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/[0.06] active:bg-white/10 transition-all">
                 <span className={`text-sm font-black w-5 text-right shrink-0 ${
-                  i === 0 ? 'text-yellow-400' :
-                  i === 1 ? 'text-white/50'   :
-                  i === 2 ? 'text-orange-400/70' :
+                  i === 0 ? 'text-yellow-400'      :
+                  i === 1 ? 'text-white/50'         :
+                  i === 2 ? 'text-orange-400/70'    :
                             'text-white/20'
                 }`}>{i + 1}</span>
                 <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 shrink-0">
