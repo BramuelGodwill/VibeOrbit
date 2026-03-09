@@ -1,171 +1,241 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Search, Music2, Play } from 'lucide-react';
-import api          from '@/lib/api';
+import { Search, Music2, Play, Pause, Radio } from 'lucide-react';
+import api                from '@/lib/api';
 import { usePlayerStore } from '@/store/playerStore';
 
-export default function SearchPage() {
-  const [query,    setQuery]    = useState('');
-  const [results,  setResults]  = useState<any[]>([]);
-  const [allSongs, setAllSongs] = useState<any[]>([]);
-  const [loading,  setLoading]  = useState(false);
-  const [searched, setSearched] = useState(false);
-  const { playSong, setQueue, currentSong, isPlaying } = usePlayerStore();
-  const timer = useRef<NodeJS.Timeout>();
+type Song = {
+  id:          string;
+  title:       string;
+  artist_name: string;
+  cover_url:   string;
+  audio_url:   string;
+  duration?:   number;
+  source?:     string;
+};
 
-  // Load ALL songs when page opens
+export default function SearchPage() {
+  const { currentSong, isPlaying, playSong, togglePlay } = usePlayerStore();
+  const [query,    setQuery]   = useState('');
+  const [results,  setResults] = useState<Song[]>([]);
+  const [myMusic,  setMyMusic] = useState<Song[]>([]);
+  const [loading,  setLoading] = useState(false);
+  const [tab,      setTab]     = useState<'all' | 'vibeorbit' | 'deezer'>('all');
+  const debounceRef = useRef<NodeJS.Timeout>();
+
+  // Load trending Deezer songs on mount
   useEffect(() => {
-    const loadAll = async () => {
-      setLoading(true);
+    const loadTrending = async () => {
       try {
-        const { data } = await api.get('/songs');
-        setAllSongs(data);
-        setQueue(data);
-      } catch { }
-      finally { setLoading(false); }
+        const { data } = await api.get('/deezer/trending?limit=20');
+        setResults(data);
+      } catch {}
     };
-    loadAll();
+    loadTrending();
   }, []);
 
-  // Search as user types
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setQuery(val);
-    clearTimeout(timer.current);
-
-    if (!val.trim()) {
-      setResults([]);
-      setSearched(false);
+  const handleSearch = (value: string) => {
+    setQuery(value);
+    clearTimeout(debounceRef.current);
+    if (!value.trim()) {
+      // Reset to trending
+      api.get('/deezer/trending?limit=20').then(r => setResults(r.data)).catch(() => {});
+      setMyMusic([]);
       return;
     }
-
-    timer.current = setTimeout(async () => {
+    debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const { data } = await api.get(`/songs/search?q=${encodeURIComponent(val)}`);
-        setResults(data);
-        setSearched(true);
-      } catch { setResults([]); }
+        const [deezerRes, myRes] = await Promise.allSettled([
+          api.get('/deezer/search?q=' + encodeURIComponent(value) + '&limit=20'),
+          api.get('/songs?search=' + encodeURIComponent(value)),
+        ]);
+        setResults(
+          deezerRes.status === 'fulfilled' ? deezerRes.value.data : []
+        );
+        setMyMusic(
+          myRes.status === 'fulfilled'
+            ? (myRes.value.data.songs || myRes.value.data || [])
+            : []
+        );
+      } catch {}
       finally { setLoading(false); }
     }, 400);
   };
 
-  // Which songs to show — search results OR all songs
-  const songsToShow = searched ? results : allSongs;
-  const queueToUse  = searched ? results : allSongs;
+  const handlePlay = (song: Song) => {
+    if (currentSong?.id === song.id) {
+      togglePlay();
+    } else {
+      playSong(song as any);
+    }
+  };
+
+  const deezerSongs  = results;
+  const vibeorbitSongs = myMusic;
+
+  const displayDeezer    = tab === 'all' || tab === 'deezer';
+  const displayVibeOrbit = tab === 'all' || tab === 'vibeorbit';
 
   return (
-    <div>
-      <h1 className="text-3xl font-black mb-6">Search</h1>
+    <div className="max-w-3xl mx-auto pb-10">
 
-      {/* Search input */}
-      <div className="relative max-w-xl mb-8">
-        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
+      {/* ── Search bar ── */}
+      <div className="relative mb-6">
+        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
         <input
-          type="search"
-          placeholder="Search songs, artists, genres..."
+          type="text"
+          placeholder="Search songs, artists, albums..."
           value={query}
-          onChange={handleChange}
-          className="pl-10"
+          onChange={e => handleSearch(e.target.value)}
           autoFocus
+          className="w-full pl-11 pr-4 py-3.5 bg-white/[0.06] border border-white/10 rounded-2xl text-sm focus:outline-none focus:border-white/30 transition-colors placeholder:text-white/25"
         />
+        {loading && (
+          <div className="absolute right-4 top-1/2 -translate-y-1/2">
+            <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+          </div>
+        )}
       </div>
 
-      {/* Loading spinner */}
-      {loading && (
-        <div className="flex items-center gap-2 text-white/40 text-sm mb-6">
-          <div className="spinner" style={{ width: 16, height: 16 }} />
-          Loading...
-        </div>
-      )}
+      {/* ── Tabs ── */}
+      <div className="flex gap-2 mb-6">
+        {[
+          { key: 'all',       label: 'All' },
+          { key: 'vibeorbit', label: 'VibeOrbit' },
+          { key: 'deezer',    label: '🌍 Deezer' },
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key as any)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              tab === t.key
+                ? 'bg-white text-black'
+                : 'bg-white/[0.06] text-white/50 hover:text-white'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {/* No results message */}
-      {!loading && searched && results.length === 0 && (
-        <div className="text-center py-20 text-white/30">
-          <p className="text-4xl mb-3">🔍</p>
-          <p className="font-semibold">No results for &quot;{query}&quot;</p>
-          <p className="text-sm mt-1">Try a different song title or artist name</p>
-        </div>
-      )}
-
-      {/* Results count */}
-      {!loading && searched && results.length > 0 && (
-        <p className="text-sm text-white/40 mb-5">
-          {results.length} result{results.length !== 1 ? 's' : ''} for &quot;{query}&quot;
-        </p>
-      )}
-
-      {/* All songs label when not searching */}
-      {!loading && !searched && allSongs.length > 0 && (
-        <p className="text-sm text-white/40 mb-5">
-          All songs — {allSongs.length} available
-        </p>
-      )}
-
-      {/* Songs grid */}
-      {!loading && songsToShow.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {songsToShow.map((song: any) => {
-            const isActive = currentSong?.id === song.id;
-            return (
-              <div
+      {/* ── VibeOrbit results ── */}
+      {displayVibeOrbit && vibeorbitSongs.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-xs text-white/30 uppercase tracking-widest font-semibold mb-3 px-1">
+            On VibeOrbit
+          </h2>
+          <div className="space-y-1">
+            {vibeorbitSongs.map(song => (
+              <SongRow
                 key={song.id}
-                onClick={() => playSong(song, queueToUse)}
-                className={`group cursor-pointer rounded-xl p-3 transition-all ${
-                  isActive
-                    ? 'bg-white/10'
-                    : 'bg-white/[0.03] hover:bg-white/[0.08]'
-                }`}
-              >
-                {/* Cover art */}
-                <div className="relative mb-3 aspect-square rounded-lg overflow-hidden bg-white/10">
-                  {song.cover_url
-                    ? <img src={song.cover_url} alt={song.title} className="w-full h-full object-cover" />
-                    : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Music2 size={28} className="text-white/20" />
-                      </div>
-                    )
-                  }
-                  {/* Play button overlay */}
-                  <div className={`absolute inset-0 flex items-end justify-end p-2 transition-opacity ${
-                    isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                  }`}>
-                    <button className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-xl hover:scale-105 transition-transform">
-                      {isActive && isPlaying
-                        ? <span className="w-3 h-3 bg-black rounded-sm" />
-                        : <Play size={14} fill="black" className="ml-0.5" />
-                      }
-                    </button>
-                  </div>
-                </div>
-
-                {/* Song info */}
-                <p className={`text-sm font-semibold truncate ${isActive ? 'text-white' : 'text-white/90'}`}>
-                  {song.title}
-                </p>
-                <p className="text-xs text-white/40 truncate mt-0.5">
-                  {song.artist_name || 'Unknown Artist'}
-                </p>
-                {song.genre && (
-                  <span className="text-[10px] text-white/25 uppercase tracking-wide">
-                    {song.genre}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                song={song}
+                isActive={currentSong?.id === song.id}
+                isPlaying={currentSong?.id === song.id && isPlaying}
+                onPlay={() => handlePlay(song)}
+              />
+            ))}
+          </div>
+        </section>
       )}
 
-      {/* Empty state — no songs at all */}
-      {!loading && !searched && allSongs.length === 0 && (
-        <div className="text-center py-20 text-white/20">
-          <Music2 size={48} className="mx-auto mb-4 opacity-30" />
-          <p className="font-semibold">No songs uploaded yet</p>
-          <p className="text-sm mt-1">Go to Upload to add the first song</p>
+      {/* ── Deezer results ── */}
+      {displayDeezer && (
+        <section>
+          <h2 className="text-xs text-white/30 uppercase tracking-widest font-semibold mb-3 px-1 flex items-center gap-2">
+            <Radio size={12} />
+            {query ? 'Deezer Results' : 'Trending on Deezer'}
+            <span className="text-white/15 normal-case tracking-normal font-normal">
+              — 30s previews
+            </span>
+          </h2>
+          {deezerSongs.length === 0 && !loading && (
+            <p className="text-white/20 text-sm text-center py-8">No results found</p>
+          )}
+          <div className="space-y-1">
+            {deezerSongs.map(song => (
+              <SongRow
+                key={song.id}
+                song={song}
+                isActive={currentSong?.id === song.id}
+                isPlaying={currentSong?.id === song.id && isPlaying}
+                onPlay={() => handlePlay(song)}
+                isDeezer
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Empty state ── */}
+      {!loading && query && deezerSongs.length === 0 && vibeorbitSongs.length === 0 && (
+        <div className="text-center py-16 text-white/20">
+          <Music2 size={32} className="mx-auto mb-3 opacity-40" />
+          <p className="text-sm">No results for "{query}"</p>
+          <p className="text-xs mt-1 text-white/10">Try a different search</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Song row component ────────────────────────────────────────────
+function SongRow({
+  song, isActive, isPlaying, onPlay, isDeezer = false
+}: {
+  song:      Song;
+  isActive:  boolean;
+  isPlaying: boolean;
+  onPlay:    () => void;
+  isDeezer?: boolean;
+}) {
+  const mins = Math.floor((song.duration || 0) / 60);
+  const secs = String((song.duration || 0) % 60).padStart(2, '0');
+
+  return (
+    <div
+      onClick={onPlay}
+      className={`flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer touch-manipulation transition-colors ${
+        isActive
+          ? 'bg-white/10'
+          : 'hover:bg-white/[0.05] active:bg-white/10'
+      }`}
+    >
+      {/* Cover */}
+      <div className="w-11 h-11 rounded-lg bg-white/10 overflow-hidden shrink-0 flex items-center justify-center relative">
+        {song.cover_url
+          ? <img src={song.cover_url} alt="" className="w-full h-full object-cover" />
+          : <Music2 size={16} className="text-white/30" />
+        }
+        {isActive && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+            {isPlaying
+              ? <Pause size={14} className="text-white" />
+              : <Play  size={14} className="text-white" />
+            }
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium truncate ${isActive ? 'text-white' : ''}`}>
+          {song.title}
+        </p>
+        <p className="text-xs text-white/40 truncate">{song.artist_name}</p>
+      </div>
+
+      {/* Badge + duration */}
+      <div className="flex items-center gap-2 shrink-0">
+        {isDeezer && (
+          <span className="text-[10px] bg-white/10 text-white/40 px-2 py-0.5 rounded-full">
+            30s
+          </span>
+        )}
+        {song.duration ? (
+          <span className="text-xs text-white/25">{mins}:{secs}</span>
+        ) : null}
+      </div>
     </div>
   );
 }
