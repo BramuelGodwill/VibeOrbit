@@ -7,6 +7,7 @@ import Sidebar   from '@/components/Sidebar';
 import PlayerBar from '@/components/PlayerBar';
 import MobileNav from '@/components/MobileNav';
 import { useAuthStore } from '@/store/authStore';
+import OnboardingModal from '@/components/OnboardingModal';
 
 // Keep backend awake — ping every 10 minutes
 if (typeof window !== 'undefined') {
@@ -71,6 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </>
         )}
         <Analytics />
+        <OnboardingModal />
       </body>
     </html>
   );
