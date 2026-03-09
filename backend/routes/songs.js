@@ -49,32 +49,7 @@ const optionalAuth = (req, res, next) => {
 };
 
 // ── Public routes ─────────────────────────────────────────────────────────
-router.get('/', optionalAuth, async(req, res) => {
-    const { search } = req.query;
-    try {
-        let result;
-        if (search && search.trim()) {
-            result = await pool.query(
-                `SELECT s.*, a.name AS artist_name
-         FROM songs s
-         LEFT JOIN artists a ON a.id = s.artist_id
-         WHERE s.title ILIKE $1 OR a.name ILIKE $1
-         ORDER BY s.play_count DESC, s.created_at DESC`, [`%${search.trim()}%`]
-            );
-        } else {
-            result = await pool.query(
-                `SELECT s.*, a.name AS artist_name
-         FROM songs s
-         LEFT JOIN artists a ON a.id = s.artist_id
-         ORDER BY s.created_at DESC`
-            );
-        }
-        res.json({ songs: result.rows });
-    } catch (err) {
-        console.error('GET /songs error:', err);
-        res.status(500).json({ error: 'Failed to fetch songs' });
-    }
-});
+router.get('/', optionalAuth, songs.getAllSongs);
 
 router.get('/trending', songs.getTrending);
 router.get('/search', songs.searchSongs);

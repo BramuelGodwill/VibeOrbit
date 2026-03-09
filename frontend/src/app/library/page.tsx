@@ -21,7 +21,7 @@ export default function LibraryPage() {
         api.get('/songs'),
       ]);
       setPlaylists(plRes.data);
-      setAllSongs(songRes.data);
+      setAllSongs(Array.isArray(songRes.data) ? songRes.data : (songRes.data.songs || []));
     } catch { }
     finally { setLoading(false); }
   };
