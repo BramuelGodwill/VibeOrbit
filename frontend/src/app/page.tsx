@@ -15,7 +15,6 @@ const GENRES = ['All','Pop','Hip-Hop','R&B','Afrobeats','Bongo Flava',
 function SongRow({ song, queue }: { song: any; queue: any[] }) {
   const { playSong, currentSong, isPlaying } = usePlayerStore();
   const isActive = currentSong?.id === song.id;
-
   return (
     <div
       onClick={() => playSong(song, queue)}
@@ -55,7 +54,6 @@ function SongRow({ song, queue }: { song: any; queue: any[] }) {
 function SongCard({ song, queue }: { song: any; queue: any[] }) {
   const { playSong, currentSong, isPlaying } = usePlayerStore();
   const isActive = currentSong?.id === song.id;
-
   return (
     <div onClick={() => playSong(song, queue)}
       className={`group cursor-pointer rounded-xl p-2.5 transition-all shrink-0 w-36 md:w-40 ${
@@ -96,7 +94,6 @@ export default function HomePage() {
   const { setQueue }                  = usePlayerStore();
   const { user }                      = useAuthStore();
 
-  // ── Set greeting client-side only to avoid hydration mismatch ──
   useEffect(() => {
     const hour = new Date().getHours();
     setGreeting(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
@@ -105,39 +102,61 @@ export default function HomePage() {
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
+      // ── All songs ──────────────────────────────────────────────
       const songsRes     = await api.get('/songs');
       const songs: any[] = Array.isArray(songsRes.data)
         ? songsRes.data
         : (songsRes.data.songs || []);
-
       setAllSongs(songs);
       setQueue(songs);
 
-      const sorted = [...songs].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
+      // ── Popular = VibeOrbit + Deezer merged by play count ──────
+      let deezerPlays: any[] = [];
+      try {
+        const dzRes = await api.get('/deezer/top-plays');
+        deezerPlays = Array.isArray(dzRes.data)
+          ? dzRes.data
+          : (dzRes.data.songs || []);
+      } catch {}
+
+      const allForPopular = [
+        ...songs.map(s      => ({ ...s, _source: 'vibeorbit' })),
+        ...deezerPlays.map(s => ({ ...s, _source: 'deezer'    })),
+      ];
+      const sorted = [...allForPopular].sort(
+        (a, b) => (b.play_count || 0) - (a.play_count || 0)
+      );
       setPopular(sorted.slice(0, 10));
 
+      // ── Recommendations ────────────────────────────────────────
       try {
-        const recRes    = await api.get('/songs/recommendations');
-        const recData   = Array.isArray(recRes.data)
+        const recRes  = await api.get('/songs/recommendations');
+        const recData = Array.isArray(recRes.data)
           ? recRes.data
           : (recRes.data.songs || []);
-        const recSorted = [...recData].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
+        const recSorted = [...recData].sort(
+          (a, b) => (b.play_count || 0) - (a.play_count || 0)
+        );
         setRecommended(recSorted.slice(0, 10));
       } catch {
         setRecommended(sorted.slice(0, 10));
       }
 
+      // ── Liked songs ────────────────────────────────────────────
       try {
-        const likesRes    = await api.get('/users/likes');
-        const likesData   = Array.isArray(likesRes.data)
+        const likesRes  = await api.get('/users/likes');
+        const likesData = Array.isArray(likesRes.data)
           ? likesRes.data
           : (likesRes.data.songs || []);
-        const likesSorted = [...likesData].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
+        const likesSorted = [...likesData].sort(
+          (a, b) => (b.play_count || 0) - (a.play_count || 0)
+        );
         setLikedSongs(likesSorted.slice(0, 10));
       } catch {
         setLikedSongs([]);
       }
 
+      // ── Jump back in ───────────────────────────────────────────
       try {
         const histRes  = await api.get('/users/history');
         const histData = Array.isArray(histRes.data)
@@ -181,18 +200,12 @@ export default function HomePage() {
       {/* ── TOP BAR ── */}
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl md:text-2xl font-black leading-tight">
-            {greeting}
-          </h1>
+          <h1 className="text-xl md:text-2xl font-black leading-tight">{greeting}</h1>
           {user && <p className="text-white/40 text-sm truncate">{user.username}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => load(true)}
-            disabled={refreshing}
-            title="Refresh"
-            className="w-8 h-8 flex items-center justify-center rounded-full text-white/30 hover:text-white hover:bg-white/10 transition-all"
-          >
+          <button onClick={() => load(true)} disabled={refreshing} title="Refresh"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-white/30 hover:text-white hover:bg-white/10 transition-all">
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
           </button>
           {!user?.is_premium && (
@@ -224,9 +237,7 @@ export default function HomePage() {
         {GENRES.map(g => (
           <button key={g} onClick={() => setGenre(g)}
             className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              genre === g
-                ? 'bg-white text-black'
-                : 'bg-white/[0.07] text-white/60 hover:bg-white/10 hover:text-white'
+              genre === g ? 'bg-white text-black' : 'bg-white/[0.07] text-white/60 hover:bg-white/10 hover:text-white'
             }`}>
             {g}
           </button>
@@ -286,9 +297,7 @@ export default function HomePage() {
           </div>
           <p className="text-xs text-white/25 mb-3">Based on your listening history</p>
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-            {recommended.map(s => (
-              <SongCard key={s.id} song={s} queue={recommended} />
-            ))}
+            {recommended.map(s => <SongCard key={s.id} song={s} queue={recommended} />)}
           </div>
         </section>
       )}
@@ -307,10 +316,8 @@ export default function HomePage() {
                 onClick={() => usePlayerStore.getState().playSong(s, popular)}
                 className="group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/[0.06] active:bg-white/10 transition-all">
                 <span className={`text-sm font-black w-5 text-right shrink-0 ${
-                  i === 0 ? 'text-yellow-400'   :
-                  i === 1 ? 'text-white/50'      :
-                  i === 2 ? 'text-orange-400/70' :
-                            'text-white/20'
+                  i === 0 ? 'text-yellow-400' : i === 1 ? 'text-white/50' :
+                  i === 2 ? 'text-orange-400/70' : 'text-white/20'
                 }`}>{i + 1}</span>
                 <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 shrink-0">
                   {s.cover_url
@@ -320,7 +327,14 @@ export default function HomePage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{s.title}</p>
-                  <p className="text-xs text-white/35 truncate">{s.artist_name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-white/35 truncate">{s.artist_name}</p>
+                    {s._source === 'deezer' && (
+                      <span className="text-[9px] bg-purple-500/20 text-purple-300/70 px-1.5 py-0.5 rounded-full shrink-0">
+                        30s
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="text-right shrink-0 min-w-[48px]">
                   {s.play_count > 0 ? (

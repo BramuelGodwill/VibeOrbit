@@ -21,18 +21,28 @@ const toArray = (data: any): Song[] =>
 
 export default function SearchPage() {
   const { currentSong, isPlaying, playSong, togglePlay } = usePlayerStore();
-  const [query,   setQuery]   = useState('');
-  const [results, setResults] = useState<Song[]>([]);
-  const [myMusic, setMyMusic] = useState<Song[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [tab,     setTab]     = useState<'all' | 'vibeorbit' | 'deezer'>('all');
+  const [query,        setQuery]        = useState('');
+  const [results,      setResults]      = useState<Song[]>([]);
+  const [myMusic,      setMyMusic]      = useState<Song[]>([]);
+  const [allMyMusic,   setAllMyMusic]   = useState<Song[]>([]); // full unfiltered list
+  const [allTrending,  setAllTrending]  = useState<Song[]>([]); // full unfiltered deezer
+  const [loading,      setLoading]      = useState(false);
+  const [tab,          setTab]          = useState<'all' | 'vibeorbit' | 'deezer'>('all');
   const debounceRef = useRef<NodeJS.Timeout>();
 
-  // Load trending Deezer songs on mount
+  // Load both sources on mount
   useEffect(() => {
-    api.get('/deezer/trending?limit=20')
-      .then(r => setResults(toArray(r.data)))
-      .catch(() => {});
+    Promise.allSettled([
+      api.get('/deezer/trending?limit=20'),
+      api.get('/songs'),
+    ]).then(([deezerRes, myRes]) => {
+      const dz = deezerRes.status === 'fulfilled' ? toArray(deezerRes.value.data) : [];
+      const my = myRes.status    === 'fulfilled'  ? toArray(myRes.value.data)     : [];
+      setResults(dz);
+      setMyMusic(my);
+      setAllTrending(dz);
+      setAllMyMusic(my);
+    });
   }, []);
 
   const handleSearch = (value: string) => {
@@ -40,10 +50,9 @@ export default function SearchPage() {
     clearTimeout(debounceRef.current);
 
     if (!value.trim()) {
-      api.get('/deezer/trending?limit=20')
-        .then(r => setResults(toArray(r.data)))
-        .catch(() => {});
-      setMyMusic([]);
+      // Restore defaults when search is cleared
+      setResults(allTrending);
+      setMyMusic(allMyMusic);
       return;
     }
 
@@ -54,12 +63,8 @@ export default function SearchPage() {
           api.get('/deezer/search?q=' + encodeURIComponent(value) + '&limit=20'),
           api.get('/songs?search='    + encodeURIComponent(value)),
         ]);
-        setResults(
-          deezerRes.status === 'fulfilled' ? toArray(deezerRes.value.data) : []
-        );
-        setMyMusic(
-          myRes.status === 'fulfilled' ? toArray(myRes.value.data) : []
-        );
+        setResults(deezerRes.status === 'fulfilled' ? toArray(deezerRes.value.data) : []);
+        setMyMusic(myRes.status    === 'fulfilled'  ? toArray(myRes.value.data)     : []);
       } catch {}
       finally { setLoading(false); }
     }, 400);
@@ -100,9 +105,9 @@ export default function SearchPage() {
       {/* ── Tabs ── */}
       <div className="flex gap-2 mb-6">
         {[
-          { key: 'all',       label: 'All'        },
-          { key: 'vibeorbit', label: 'VibeOrbit'  },
-          { key: 'deezer',    label: '🌍 Deezer'  },
+          { key: 'all',       label: 'All'       },
+          { key: 'vibeorbit', label: 'VibeOrbit' },
+          { key: 'deezer',    label: '🌍 Deezer' },
         ].map(t => (
           <button
             key={t.key}
@@ -199,7 +204,6 @@ function SongRow({
         isActive ? 'bg-white/10' : 'hover:bg-white/[0.05] active:bg-white/10'
       }`}
     >
-      {/* Cover */}
       <div className="w-11 h-11 rounded-lg bg-white/10 overflow-hidden shrink-0 flex items-center justify-center relative">
         {song.cover_url
           ? <img src={song.cover_url} alt="" className="w-full h-full object-cover" />
@@ -215,7 +219,6 @@ function SongRow({
         )}
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-medium truncate ${isActive ? 'text-white' : ''}`}>
           {song.title}
@@ -223,7 +226,6 @@ function SongRow({
         <p className="text-xs text-white/40 truncate">{song.artist_name}</p>
       </div>
 
-      {/* Badge + duration */}
       <div className="flex items-center gap-2 shrink-0">
         {isDeezer && (
           <span className="text-[10px] bg-purple-500/20 text-purple-300/70 px-2 py-0.5 rounded-full">
