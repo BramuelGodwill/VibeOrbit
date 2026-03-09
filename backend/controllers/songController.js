@@ -33,46 +33,52 @@ exports.uploadSong = async(req, res) => {
         const result = await pool.query(
             `INSERT INTO songs (title, artist_id, audio_url, cover_url, genre, duration, uploaded_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`, [
-                title.trim(),
-                artistId,
-                audio_url,
-                finalCover,
-                genre || null,
-                parseInt(duration) || 0,
-                req.userId,
-            ]
+       RETURNING *`, [title.trim(), artistId, audio_url, finalCover, genre || null, parseInt(duration) || 0, req.userId]
         );
 
         const song = result.rows[0];
         const cleanName = artistName ? artistName.trim() : null;
-        res.status(201).json(Object.assign({}, song, { artist_name: cleanName }));
+        res.status(201).json({...song, artist_name: cleanName });
 
     } catch (err) {
         console.error('Upload song error:', err);
-        if (err.code === '23505') {
+        if (err.code === '23505')
             return res.status(400).json({ error: 'A song with this title already exists' });
-        }
         res.status(500).json({ error: 'Upload failed', details: err.message });
     }
 };
 
-// ── GET ALL SONGS ─────────────────────────────────────────────────────────
+// ── GET ALL SONGS (supports ?search= param) ───────────────────────────────
 exports.getAllSongs = async(req, res) => {
+    const { search } = req.query;
     try {
-        const result = await pool.query(
-            `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
-       FROM songs s
-       LEFT JOIN artists a ON s.artist_id = a.id
-       ORDER BY s.created_at DESC`
-        );
+        let result;
+        if (search && search.trim()) {
+            result = await pool.query(
+                `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
+         FROM songs s
+         LEFT JOIN artists a ON s.artist_id = a.id
+         WHERE s.title ILIKE $1
+            OR a.name  ILIKE $1
+            OR s.genre ILIKE $1
+         ORDER BY s.play_count DESC, s.created_at DESC`, [`%${search.trim()}%`]
+            );
+        } else {
+            result = await pool.query(
+                `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
+         FROM songs s
+         LEFT JOIN artists a ON s.artist_id = a.id
+         ORDER BY s.created_at DESC`
+            );
+        }
         res.json(result.rows);
     } catch (err) {
+        console.error('getAllSongs error:', err);
         res.status(500).json({ error: 'Failed to fetch songs' });
     }
 };
 
-// ── GET SINGLE SONG (no play count here — use POST /:id/play instead) ─────
+// ── GET SINGLE SONG ───────────────────────────────────────────────────────
 exports.getSong = async(req, res) => {
     try {
         const result = await pool.query(
@@ -88,11 +94,10 @@ exports.getSong = async(req, res) => {
     }
 };
 
-// ── SEARCH SONGS ──────────────────────────────────────────────────────────
+// ── SEARCH SONGS (legacy ?q= endpoint) ───────────────────────────────────
 exports.searchSongs = async(req, res) => {
     const { q } = req.query;
     if (!q || !q.trim()) return res.json([]);
-
     try {
         const result = await pool.query(
             `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
@@ -102,7 +107,7 @@ exports.searchSongs = async(req, res) => {
           OR a.name  ILIKE $1
           OR s.genre ILIKE $1
        ORDER BY s.play_count DESC
-       LIMIT 50`, ['%' + q.trim() + '%']
+       LIMIT 50`, [`%${q.trim()}%`]
         );
         res.json(result.rows);
     } catch (err) {
@@ -110,10 +115,9 @@ exports.searchSongs = async(req, res) => {
     }
 };
 
-// ── GET RECOMMENDATIONS (based on user's listening history genres) ─────────
+// ── GET RECOMMENDATIONS ───────────────────────────────────────────────────
 exports.getRecommendations = async(req, res) => {
     try {
-        // Find genres this user listens to most
         const historyResult = await pool.query(
             `SELECT s.genre, COUNT(*) AS listen_count
        FROM listening_history lh
@@ -124,11 +128,10 @@ exports.getRecommendations = async(req, res) => {
        LIMIT 3`, [req.userId]
         );
 
-        const genres = historyResult.rows.map(function(r) { return r.genre; });
+        const genres = historyResult.rows.map(r => r.genre);
         let songs;
 
         if (genres.length > 0) {
-            // Return songs in those genres sorted by most played by everyone
             songs = await pool.query(
                 `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
          FROM songs s
@@ -139,7 +142,6 @@ exports.getRecommendations = async(req, res) => {
             );
         }
 
-        // Fallback: most played songs overall
         if (!songs || songs.rows.length === 0) {
             songs = await pool.query(
                 `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
@@ -156,7 +158,7 @@ exports.getRecommendations = async(req, res) => {
     }
 };
 
-// ── GET TRENDING (most played by all users) ───────────────────────────────
+// ── GET TRENDING ──────────────────────────────────────────────────────────
 exports.getTrending = async(req, res) => {
     try {
         const result = await pool.query(
@@ -178,9 +180,9 @@ exports.deleteSong = async(req, res) => {
         const song = await pool.query(
             'SELECT * FROM songs WHERE id = $1 AND uploaded_by = $2', [req.params.id, req.userId]
         );
-        if (!song.rows[0]) {
+        if (!song.rows[0])
             return res.status(404).json({ error: 'Song not found or unauthorized' });
-        }
+
         await pool.query('DELETE FROM songs WHERE id = $1', [req.params.id]);
         res.json({ message: 'Song deleted' });
     } catch (err) {
