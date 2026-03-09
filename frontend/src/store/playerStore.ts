@@ -8,6 +8,9 @@ export interface Song {
   cover_url?:  string;
   genre?:      string;
   duration?:   number;
+  source?:     string; // 'deezer' | 'cloudinary' | undefined
+  deezer_id?:  number;
+  album?:      string;
 }
 
 interface PlayerState {
@@ -24,13 +27,15 @@ interface PlayerState {
   stop:        () => void;
 }
 
-const recordPlay = (songId: string) => {
+// Only record plays for YOUR songs — not Deezer previews
+const recordPlay = (song: Song) => {
+  if (song.source === 'deezer') return; // skip Deezer songs
   try {
     const token   = typeof window !== 'undefined' ? localStorage.getItem('vb_token') : null;
     const apiUrl  = process.env.NEXT_PUBLIC_API_URL || '/api';
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = 'Bearer ' + token;
-    fetch(apiUrl + '/songs/' + songId + '/play', {
+    fetch(apiUrl + '/songs/' + song.id + '/play', {
       method: 'POST',
       headers,
     }).catch(() => {});
@@ -44,19 +49,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   volume:      0.75,
 
   playSong: (song, newQueue) => {
-    // Only record a play if it's a different song
     const current = get().currentSong;
     if (!current || current.id !== song.id) {
-      recordPlay(song.id);
-      // Preload next song in queue silently
-    const q    = newQueue ?? get().queue;
-    const idx  = q.findIndex((s) => s.id === song.id);
-    const next = q[idx + 1];
-    if (next && typeof window !== 'undefined') {
-      const preloadAudio   = new Audio();
-      preloadAudio.preload = 'auto';
-      preloadAudio.src     = next.audio_url;
-    }
+      recordPlay(song);
+
+      // Preload next song silently (only for non-Deezer songs)
+      const q    = newQueue ?? get().queue;
+      const idx  = q.findIndex((s) => s.id === song.id);
+      const next = q[idx + 1];
+      if (next && next.source !== 'deezer' && typeof window !== 'undefined') {
+        const preloadAudio   = new Audio();
+        preloadAudio.preload = 'auto';
+        preloadAudio.src     = next.audio_url;
+      }
     }
     set({
       currentSong: song,
@@ -66,10 +71,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   togglePlay: () => set((s) => ({ isPlaying: !s.isPlaying })),
-
-  setQueue: (queue) => set({ queue }),
-
-  setVolume: (volume) => set({ volume }),
+  setQueue:   (queue)  => set({ queue }),
+  setVolume:  (volume) => set({ volume }),
 
   playNext: () => {
     const { queue, currentSong } = get();
@@ -77,7 +80,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const idx  = queue.findIndex((s) => s.id === currentSong?.id);
     const next = queue[idx + 1];
     if (next) {
-      recordPlay(next.id);
+      recordPlay(next);
       set({ currentSong: next, isPlaying: true });
     }
   },
@@ -88,7 +91,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const idx  = queue.findIndex((s) => s.id === currentSong?.id);
     const prev = queue[idx - 1];
     if (prev) {
-      recordPlay(prev.id);
+      recordPlay(prev);
       set({ currentSong: prev, isPlaying: true });
     }
   },

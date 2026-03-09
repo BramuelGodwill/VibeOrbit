@@ -34,7 +34,7 @@ const handleUpload = (req, res, next) => {
     });
 };
 
-// ── Optional auth middleware (doesn't block if no token) ──────────────────
+// ── Optional auth (doesn't block if no token) ─────────────────────────────
 const optionalAuth = (req, res, next) => {
     const header = req.headers.authorization;
     if (header && header.startsWith('Bearer ')) {
@@ -48,19 +48,38 @@ const optionalAuth = (req, res, next) => {
     next();
 };
 
-// Public
-router.get('/', songs.getAllSongs);
+// ── Public routes ─────────────────────────────────────────────────────────
+router.get('/', optionalAuth, async(req, res) => {
+    const { search } = req.query;
+    try {
+        let result;
+        if (search && search.trim()) {
+            result = await pool.query(
+                `SELECT * FROM songs
+         WHERE title ILIKE $1 OR artist_name ILIKE $1
+         ORDER BY play_count DESC, created_at DESC`, [`%${search.trim()}%`]
+            );
+        } else {
+            result = await pool.query(
+                'SELECT * FROM songs ORDER BY created_at DESC'
+            );
+        }
+        res.json({ songs: result.rows });
+    } catch (err) {
+        console.error('GET /songs error:', err);
+        res.status(500).json({ error: 'Failed to fetch songs' });
+    }
+});
+
 router.get('/trending', songs.getTrending);
 router.get('/search', songs.searchSongs);
 
-// ── Record a play — called by frontend when song starts ───────────────────
+// ── Record a play ─────────────────────────────────────────────────────────
 router.post('/:id/play', optionalAuth, async(req, res) => {
     try {
-        // Increment global play count
         await pool.query(
             'UPDATE songs SET play_count = play_count + 1 WHERE id = $1', [req.params.id]
         );
-        // Record in listening history if user is logged in
         if (req.userId) {
             await pool.query(
                 'INSERT INTO listening_history (user_id, song_id) VALUES ($1, $2)', [req.userId, req.params.id]
@@ -72,11 +91,11 @@ router.post('/:id/play', optionalAuth, async(req, res) => {
     }
 });
 
-// Auth required
+// ── Auth required ─────────────────────────────────────────────────────────
 router.get('/recommendations', authMiddleware, songs.getRecommendations);
 router.get('/:id', optionalAuth, songs.getSong);
 
-// Admin only
+// ── Admin only ────────────────────────────────────────────────────────────
 router.post('/upload', authMiddleware.adminOnly, handleUpload, songs.uploadSong);
 router.delete('/:id', authMiddleware.adminOnly, songs.deleteSong);
 

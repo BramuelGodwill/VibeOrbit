@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Music2, X,
-  Repeat, Repeat1, Share2, Heart, ListPlus
+  Repeat, Repeat1, Share2, Heart, ListPlus, Radio
 } from 'lucide-react';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore }   from '@/store/authStore';
@@ -35,19 +35,20 @@ export default function PlayerBar() {
   const [showPL,   setShowPL]   = useState(false);
   const [addedMsg, setAddedMsg] = useState('');
 
+  const isDeezer = currentSong?.source === 'deezer';
+
   // ── Load + play new song ───────────────────────────────────────────────
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentSong) return;
 
-    // Remove any previous canplay listener to avoid double-play
     const tryPlay = () => { audio.play().catch(() => {}); };
 
     audio.pause();
-    audio.preload  = 'auto';
-    audio.src      = currentSong.audio_url;
-    audio.loop     = false; // handled manually
-    audio.volume   = muted ? 0 : volume;
+    audio.preload     = 'auto';
+    audio.src         = currentSong.audio_url;
+    audio.loop        = false;
+    audio.volume      = muted ? 0 : volume;
     audio.currentTime = 0;
     setLiked(false);
     setCurrent(0);
@@ -61,7 +62,7 @@ export default function PlayerBar() {
 
     return () => { audio.removeEventListener('canplay', tryPlay); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSong?.id]); // only re-run when song ID changes, NOT on every render
+  }, [currentSong?.id]);
 
   // ── Play / pause toggle ───────────────────────────────────────────────
   useEffect(() => {
@@ -104,7 +105,6 @@ export default function PlayerBar() {
       const first = queue[0];
       if (first) usePlayerStore.getState().playSong(first, queue);
     } else {
-      // End of queue, no loop — stop cleanly
       audio.currentTime = 0;
       usePlayerStore.setState({ isPlaying: false });
     }
@@ -122,17 +122,15 @@ export default function PlayerBar() {
     setLoop(l => l === 'none' ? 'all' : l === 'all' ? 'one' : 'none');
 
   const handleLike = async () => {
-    if (!isAuthenticated() || !currentSong) return;
+    // Deezer previews cannot be liked (not in your DB)
+    if (!isAuthenticated() || !currentSong || isDeezer) return;
     const newLiked = !liked;
     setLiked(newLiked);
     try {
-      if (newLiked) {
-        await api.post('/users/likes/' + currentSong.id);
-      } else {
-        await api.delete('/users/likes/' + currentSong.id);
-      }
+      if (newLiked) await api.post('/users/likes/' + currentSong.id);
+      else          await api.delete('/users/likes/' + currentSong.id);
     } catch {
-      setLiked(!newLiked); // revert on error
+      setLiked(!newLiked);
     }
   };
 
@@ -149,7 +147,12 @@ export default function PlayerBar() {
   };
 
   const loadPlaylists = async () => {
-    if (!isAuthenticated()) return;
+    // Cannot add Deezer previews to playlists
+    if (!isAuthenticated() || isDeezer) {
+      setAddedMsg(isDeezer ? 'Only full songs can be added to playlists' : '');
+      setTimeout(() => setAddedMsg(''), 2500);
+      return;
+    }
     try {
       const { data } = await api.get('/playlists/my');
       setPlaylists(data);
@@ -176,7 +179,13 @@ export default function PlayerBar() {
 
   if (!currentSong) return null;
 
-  // ── Single <audio> element shared by both mobile + desktop ───────────
+  // ── Deezer preview badge ──────────────────────────────────────────────
+  const DeezerBadge = () => (
+    <span className="inline-flex items-center gap-1 text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-medium shrink-0">
+      <Radio size={9} /> 30s preview
+    </span>
+  );
+
   const audioEl = (
     <audio
       ref={audioRef}
@@ -239,15 +248,19 @@ export default function PlayerBar() {
             }
           </div>
 
-          {/* Title + like/share */}
-          <div className="flex items-center justify-between w-full max-w-xs mb-6">
+          {/* Title + badge + like/share */}
+          <div className="flex items-center justify-between w-full max-w-xs mb-2">
             <div className="min-w-0 flex-1">
               <h2 className="text-xl font-black truncate">{currentSong.title}</h2>
               <p className="text-white/50 text-sm mt-0.5">{currentSong.artist_name || 'Unknown Artist'}</p>
+              {isDeezer && <div className="mt-1.5"><DeezerBadge /></div>}
             </div>
             <div className="flex items-center gap-3 shrink-0 ml-4">
               <button onClick={handleLike}
-                className={`transition-all active:scale-90 ${liked ? 'text-red-400 scale-110' : 'text-white/30'}`}>
+                className={`transition-all active:scale-90 ${
+                  isDeezer ? 'text-white/15 cursor-not-allowed' :
+                  liked    ? 'text-red-400 scale-110' : 'text-white/30'
+                }`}>
                 <Heart size={22} fill={liked ? 'currentColor' : 'none'} />
               </button>
               <button onClick={handleShare} className="text-white/30 active:scale-90 transition-all">
@@ -255,6 +268,13 @@ export default function PlayerBar() {
               </button>
             </div>
           </div>
+
+          {/* Deezer info message */}
+          {isDeezer && (
+            <p className="text-white/25 text-xs text-center mb-4 max-w-xs">
+              This is a 30-second Deezer preview. Search on VibeOrbit for full songs.
+            </p>
+          )}
 
           {/* Seek bar */}
           <div className="w-full max-w-xs mb-5">
@@ -288,7 +308,7 @@ export default function PlayerBar() {
               <SkipForward size={28} />
             </button>
             <button onClick={loadPlaylists}
-              className="text-white/30 hover:text-white active:scale-90 transition-all">
+              className={`transition-all active:scale-90 ${isDeezer ? 'text-white/15 cursor-not-allowed' : 'text-white/30 hover:text-white'}`}>
               <ListPlus size={20} />
             </button>
           </div>
@@ -314,7 +334,6 @@ export default function PlayerBar() {
 
       {/* ── MOBILE mini bar ── */}
       <div className="fixed bottom-0 inset-x-0 z-50 md:hidden">
-        {/* Progress line */}
         <div className="h-[2px] bg-white/10 relative">
           <div className="absolute inset-y-0 left-0 bg-white transition-all duration-300"
             style={{ width: `${progress}%` }} />
@@ -325,20 +344,32 @@ export default function PlayerBar() {
           <div className="flex items-center gap-2">
             {/* Cover — tap to expand */}
             <div onClick={() => setExpanded(true)}
-              className="w-10 h-10 rounded-lg bg-white/10 overflow-hidden shrink-0 cursor-pointer active:opacity-70">
+              className="w-10 h-10 rounded-lg bg-white/10 overflow-hidden shrink-0 cursor-pointer active:opacity-70 relative">
               {currentSong.cover_url
                 ? <img src={currentSong.cover_url} alt="" className="w-full h-full object-cover" />
                 : <Music2 size={14} className="m-auto mt-3 text-white/20" />
               }
+              {/* Purple dot for Deezer */}
+              {isDeezer && (
+                <div className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-purple-400" />
+              )}
             </div>
+
             {/* Title — tap to expand */}
             <div onClick={() => setExpanded(true)} className="flex-1 min-w-0 cursor-pointer">
               <p className="text-sm font-semibold truncate leading-tight">{currentSong.title}</p>
-              <p className="text-xs text-white/35 truncate">{currentSong.artist_name || 'Unknown'}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs text-white/35 truncate">{currentSong.artist_name || 'Unknown'}</p>
+                {isDeezer && <DeezerBadge />}
+              </div>
             </div>
-            {/* Like */}
+
+            {/* Like — disabled for Deezer */}
             <button onClick={handleLike}
-              className={`p-1.5 active:scale-90 transition-all ${liked ? 'text-red-400' : 'text-white/30'}`}>
+              className={`p-1.5 active:scale-90 transition-all ${
+                isDeezer ? 'text-white/15' :
+                liked    ? 'text-red-400'  : 'text-white/30'
+              }`}>
               <Heart size={17} fill={liked ? 'currentColor' : 'none'} />
             </button>
             {/* Prev */}
@@ -373,18 +404,28 @@ export default function PlayerBar() {
 
             {/* Song info + like */}
             <div className="flex items-center gap-3 w-64 min-w-0">
-              <div className="w-11 h-11 rounded-lg bg-white/10 overflow-hidden shrink-0">
+              <div className="w-11 h-11 rounded-lg bg-white/10 overflow-hidden shrink-0 relative">
                 {currentSong.cover_url
                   ? <img src={currentSong.cover_url} alt="" className="w-full h-full object-cover" />
                   : <Music2 size={16} className="m-auto mt-3 text-white/20" />
                 }
+                {isDeezer && (
+                  <div className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-purple-400" />
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold truncate">{currentSong.title}</p>
-                <p className="text-xs text-white/35 truncate">{currentSong.artist_name || 'Unknown'}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="text-xs text-white/35 truncate">{currentSong.artist_name || 'Unknown'}</p>
+                  {isDeezer && <DeezerBadge />}
+                </div>
               </div>
               <button onClick={handleLike}
-                className={`shrink-0 transition-all ${liked ? 'text-red-400 scale-110' : 'text-white/25 hover:text-white'}`}>
+                className={`shrink-0 transition-all ${
+                  isDeezer      ? 'text-white/15 cursor-not-allowed' :
+                  liked         ? 'text-red-400 scale-110'           :
+                                  'text-white/25 hover:text-white'
+                }`}>
                 <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
               </button>
             </div>
@@ -409,8 +450,8 @@ export default function PlayerBar() {
                 <button onClick={playNext} className="text-white/40 hover:text-white transition-colors">
                   <SkipForward size={18} />
                 </button>
-                <button onClick={loadPlaylists} title="Add to playlist"
-                  className="text-white/25 hover:text-white transition-colors">
+                <button onClick={loadPlaylists} title={isDeezer ? 'Not available for previews' : 'Add to playlist'}
+                  className={`transition-colors ${isDeezer ? 'text-white/15 cursor-not-allowed' : 'text-white/25 hover:text-white'}`}>
                   <ListPlus size={18} />
                 </button>
               </div>
