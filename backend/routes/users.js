@@ -98,7 +98,7 @@ router.get('/likes', authMiddleware, async(req, res) => {
     }
 });
 
-// ── GET listening history (most recently played first, deduped by song) ───
+// ── GET listening history ─────────────────────────────────────────────────
 router.get('/history', authMiddleware, async(req, res) => {
     try {
         const result = await pool.query(
@@ -120,7 +120,8 @@ router.get('/history', authMiddleware, async(req, res) => {
     }
 });
 
-// router.post('/preferences', authMiddleware, async(req, res) => {
+// ── SAVE onboarding preferences ───────────────────────────────────────────
+router.post('/preferences', authMiddleware, async(req, res) => {
     const { genres, artist_names } = req.body;
     try {
         await pool.query(
@@ -142,7 +143,7 @@ router.get('/preferences', authMiddleware, async(req, res) => {
         const result = await pool.query(
             'SELECT completed FROM user_preferences WHERE user_id = $1', [req.userId]
         );
-        res.json({ completed: result.rows[0]?.completed || false });
+        res.json({ completed: result.rows[0] ? .completed || false });
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch preferences' });
     }
