@@ -115,9 +115,10 @@ exports.searchSongs = async(req, res) => {
     }
 };
 
-// ── GET RECOMMENDATIONS ───────────────────────────────────────────────────
+// ── GET RECOMMENDATIONS (personal — based on user's listening history) ────
 exports.getRecommendations = async(req, res) => {
     try {
+        // Step 1: Get user's top genres from listening history
         const historyResult = await pool.query(
             `SELECT s.genre, COUNT(*) AS listen_count
        FROM listening_history lh
@@ -129,9 +130,30 @@ exports.getRecommendations = async(req, res) => {
         );
 
         const genres = historyResult.rows.map(r => r.genre);
-        let songs;
 
-        if (genres.length > 0) {
+        // Step 2: No history = return empty so Top Mixes doesn't show
+        if (genres.length === 0) {
+            return res.json([]);
+        }
+
+        // Step 3: Get songs from those genres, excluding already-played songs
+        const playedResult = await pool.query(
+            `SELECT DISTINCT song_id FROM listening_history WHERE user_id = $1`, [req.userId]
+        );
+        const playedIds = playedResult.rows.map(r => r.song_id);
+
+        let songs;
+        if (playedIds.length > 0) {
+            songs = await pool.query(
+                `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
+         FROM songs s
+         LEFT JOIN artists a ON s.artist_id = a.id
+         WHERE s.genre = ANY($1)
+           AND s.id != ALL($2)
+         ORDER BY s.play_count DESC
+         LIMIT 20`, [genres, playedIds]
+            );
+        } else {
             songs = await pool.query(
                 `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
          FROM songs s
@@ -142,18 +164,22 @@ exports.getRecommendations = async(req, res) => {
             );
         }
 
-        if (!songs || songs.rows.length === 0) {
-            songs = await pool.query(
+        // Step 4: If not enough results, fill with top played in same genres
+        if (songs.rows.length < 5) {
+            const fill = await pool.query(
                 `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
          FROM songs s
          LEFT JOIN artists a ON s.artist_id = a.id
+         WHERE s.genre = ANY($1)
          ORDER BY s.play_count DESC
-         LIMIT 20`
+         LIMIT 20`, [genres]
             );
+            return res.json(fill.rows);
         }
 
         res.json(songs.rows);
     } catch (err) {
+        console.error('Recommendations error:', err);
         res.status(500).json({ error: 'Failed to fetch recommendations' });
     }
 };
