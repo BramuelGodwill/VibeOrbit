@@ -98,16 +98,18 @@ router.get('/likes', authMiddleware, async(req, res) => {
     }
 });
 
-// ── GET listening history ─────────────────────────────────────────────────
+// ── GET listening history (most recently played first, deduped by song) ───
 router.get('/history', authMiddleware, async(req, res) => {
     try {
         const result = await pool.query(
-            `SELECT DISTINCT ON (s.id) s.*, a.name AS artist_name, a.image_url AS artist_image
+            `SELECT DISTINCT ON (s.id) s.*, a.name AS artist_name, a.image_url AS artist_image,
+              MAX(lh.listened_at) AS last_played
        FROM listening_history lh
        JOIN songs s ON lh.song_id = s.id
        LEFT JOIN artists a ON s.artist_id = a.id
        WHERE lh.user_id = $1
-       ORDER BY s.id, lh.listened_at DESC
+       GROUP BY s.id, a.name, a.image_url
+       ORDER BY last_played DESC
        LIMIT 20`, [req.userId]
         );
         res.json(result.rows);
@@ -139,7 +141,7 @@ router.get('/preferences', authMiddleware, async(req, res) => {
         const result = await pool.query(
             'SELECT completed FROM user_preferences WHERE user_id = $1', [req.userId]
         );
-        res.json({ completed: result.rows[0]?.completed || false });
+        res.json({ completed: result.rows[0] ? .completed || false });
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch preferences' });
     }
