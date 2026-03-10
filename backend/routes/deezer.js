@@ -101,7 +101,7 @@ router.get('/top-plays', async(req, res) => {
                         deezer_id: row.deezer_id,
                         title: row.title,
                         artist_name: row.artist_name,
-                        cover_url: track.album ? .cover_medium || row.cover_url,
+                        cover_url: track.album?.cover_medium || row.cover_url,
                         audio_url: track.preview,
                         play_count: row.play_count,
                         source: 'deezer',
