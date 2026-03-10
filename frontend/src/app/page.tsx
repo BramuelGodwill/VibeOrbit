@@ -171,16 +171,21 @@ export default function HomePage() {
         setRecent([]);
       }
 
-      // ── Recommendations (only if user has history) ─────────────
+      // ── Recommendations — explicitly pass token ────────────────
       if (histData.length > 0) {
         try {
-          const recRes  = await api.get('/songs/recommendations');
+          const token = typeof window !== 'undefined'
+            ? localStorage.getItem('vb_token')
+            : null;
+          const recRes = await api.get('/songs/recommendations', {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
           const recData = Array.isArray(recRes.data)
             ? recRes.data
             : (recRes.data.songs || []);
           setRecommended(recData.slice(0, 10));
         } catch {
-          setRecommended(sorted.slice(0, 10));
+          setRecommended([]);
         }
       } else {
         setRecommended([]);
