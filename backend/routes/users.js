@@ -121,10 +121,10 @@ router.post('/preferences', authMiddleware, async(req, res) => {
     const { genres, artist_names } = req.body;
     try {
         await pool.query(
-            `INSERT INTO user_preferences (user_id, genres, artist_ids, completed)
+            `INSERT INTO user_preferences (user_id, genres, artist_names, completed)
        VALUES ($1, $2, $3, true)
        ON CONFLICT (user_id)
-       DO UPDATE SET genres = $2, artist_ids = $3, completed = true`, [req.userId, genres || [], artist_names || []]
+       DO UPDATE SET genres = $2, artist_names = $3, completed = true`, [req.userId, genres || [], artist_names || []]
         );
         res.json({ ok: true });
     } catch (err) {
@@ -139,7 +139,7 @@ router.get('/preferences', authMiddleware, async(req, res) => {
         const result = await pool.query(
             'SELECT completed FROM user_preferences WHERE user_id = $1', [req.userId]
         );
-        res.json({ completed: result.rows[0]?.completed || false });
+        res.json({ completed: result.rows[0] ? .completed || false });
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch preferences' });
     }
