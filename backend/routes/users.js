@@ -98,24 +98,43 @@ router.get('/likes', authMiddleware, async(req, res) => {
     }
 });
 
-// ── GET listening history ─────────────────────────────────────────────────
+// ── GET listening history (VibeOrbit + Deezer merged) ─────────────────────
 router.get('/history', authMiddleware, async(req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
-       FROM songs s
+        // VibeOrbit songs from listening_history
+        const vibeRes = await pool.query(
+            `SELECT s.id, s.title, a.name AS artist_name, s.cover_url, s.audio_url,
+              s.genre, s.duration, NULL AS deezer_id, NULL AS album,
+              'vibeorbit' AS source,
+              MAX(lh.listened_at) AS last_played
+       FROM listening_history lh
+       JOIN songs s ON lh.song_id = s.id
        LEFT JOIN artists a ON s.artist_id = a.id
-       WHERE s.id IN (
-         SELECT song_id FROM listening_history WHERE user_id = $1
-       )
-       ORDER BY (
-         SELECT MAX(listened_at) FROM listening_history
-         WHERE user_id = $1 AND song_id = s.id
-       ) DESC
+       WHERE lh.user_id = $1
+       GROUP BY s.id, a.name
+       ORDER BY last_played DESC
        LIMIT 20`, [req.userId]
         );
-        res.json(result.rows);
+
+        // Deezer songs from deezer_plays sorted by most recently played
+        const dzRes = await pool.query(
+            `SELECT deezer_id::text AS id, title, artist_name, cover_url, audio_url,
+              NULL AS genre, NULL AS duration, deezer_id, album,
+              'deezer' AS source,
+              last_played
+       FROM deezer_plays
+       ORDER BY last_played DESC
+       LIMIT 20`
+        );
+
+        // Merge and sort by last_played, take top 20
+        const merged = [...vibeRes.rows, ...dzRes.rows]
+            .sort((a, b) => new Date(b.last_played) - new Date(a.last_played))
+            .slice(0, 20);
+
+        res.json(merged);
     } catch (err) {
+        console.error('History error:', err);
         res.status(500).json({ error: 'Failed to fetch history' });
     }
 });
@@ -143,7 +162,7 @@ router.get('/preferences', authMiddleware, async(req, res) => {
         const result = await pool.query(
             'SELECT completed FROM user_preferences WHERE user_id = $1', [req.userId]
         );
-        res.json({ completed: result.rows[0]?.completed || false });
+        res.json({ completed: result.rows[0] ? .completed || false });
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch preferences' });
     }
