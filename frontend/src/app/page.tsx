@@ -200,12 +200,16 @@ export default function HomePage() {
 
   useEffect(() => { load(); }, [load]);
 
-// Reload when user comes back to the tab
-useEffect(() => {
-  const handleFocus = () => load();
-  window.addEventListener('focus', handleFocus);
-  return () => window.removeEventListener('focus', handleFocus);
-}, [load]);
+  // ── Reload on tab focus or song play event ─────────────────────
+  useEffect(() => {
+    const handleFocus = () => load();
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('vb-song-played', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('vb-song-played', handleFocus);
+    };
+  }, [load]);
 
   // All Songs = VibeOrbit + Deezer trending (deduped by title)
   const allCombined = [
