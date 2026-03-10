@@ -107,7 +107,7 @@ router.get('/history', authMiddleware, async(req, res) => {
        JOIN songs s ON lh.song_id = s.id
        LEFT JOIN artists a ON s.artist_id = a.id
        WHERE lh.user_id = $1
-       ORDER BY s.id, lh.played_at DESC
+       ORDER BY s.id, lh.listened_at DESC
        LIMIT 20`, [req.userId]
         );
         res.json(result.rows);
@@ -139,7 +139,7 @@ router.get('/preferences', authMiddleware, async(req, res) => {
         const result = await pool.query(
             'SELECT completed FROM user_preferences WHERE user_id = $1', [req.userId]
         );
-        res.json({ completed: result.rows[0]?.completed || false });
+        res.json({ completed: result.rows[0] ? .completed || false });
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch preferences' });
     }
