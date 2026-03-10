@@ -102,19 +102,23 @@ router.get('/likes', authMiddleware, async(req, res) => {
 router.get('/history', authMiddleware, async(req, res) => {
     try {
         const result = await pool.query(
-            `SELECT DISTINCT ON (s.id) s.*, a.name AS artist_name, a.image_url AS artist_image,
-              MAX(lh.listened_at) AS last_played
-       FROM listening_history lh
-       JOIN songs s ON lh.song_id = s.id
+            `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
+       FROM songs s
        LEFT JOIN artists a ON s.artist_id = a.id
-       WHERE lh.user_id = $1
-       GROUP BY s.id, a.name, a.image_url
-       ORDER BY last_played DESC
+       WHERE s.id IN (
+         SELECT song_id FROM listening_history WHERE user_id = $1
+       )
+       ORDER BY (
+         SELECT MAX(listened_at) FROM listening_history
+         WHERE user_id = $1 AND song_id = s.id
+       ) DESC
        LIMIT 20`, [req.userId]
         );
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch history' });
+    }
+});
     }
 });
 
