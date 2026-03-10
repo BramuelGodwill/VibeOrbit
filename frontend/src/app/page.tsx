@@ -316,7 +316,7 @@ export default function HomePage() {
       )}
 
       {/* ── TOP MIXES — only if user has listening history ── */}
-      {recommended.length > 0 && recent.length > 0 && genre === 'All' && (
+      {recommended.length > 0 && genre === 'All' && (
         <section>
           <div className="flex items-center gap-2 mb-1">
             <Headphones size={15} className="text-white/40" />
