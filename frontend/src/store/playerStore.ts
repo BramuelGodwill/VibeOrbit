@@ -65,13 +65,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playSong: (song, newQueue) => {
     const current = get().currentSong;
     if (!current || current.id !== song.id) {
-  recordPlay(song);
-  if (typeof window !== 'undefined') {
-    setTimeout(() => window.dispatchEvent(new Event('vb-song-played')), 2000);
-  }
+      recordPlay(song);
+
+      // Dispatch event so home page refreshes history/recommendations
+      if (typeof window !== 'undefined') {
+        setTimeout(() => window.dispatchEvent(new Event('vb-song-played')), 2000);
+      }
+
       // Preload next song silently (non-Deezer only)
-      const q   = newQueue ?? get().queue;
-      const idx = q.findIndex((s) => s.id === song.id);
+      const q    = newQueue ?? get().queue;
+      const idx  = q.findIndex((s) => s.id === song.id);
       const next = q[idx + 1];
       if (next && next.source !== 'deezer' && typeof window !== 'undefined') {
         const preloadAudio   = new Audio();
@@ -100,6 +103,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const next = queue[idx + 1];
     if (next) {
       recordPlay(next);
+      // Dispatch event for home page refresh
+      if (typeof window !== 'undefined') {
+        setTimeout(() => window.dispatchEvent(new Event('vb-song-played')), 2000);
+      }
       set({ currentSong: next, isPlaying: true });
     }
   },
@@ -111,6 +118,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const prev = queue[idx - 1];
     if (prev) {
       recordPlay(prev);
+      // Dispatch event for home page refresh
+      if (typeof window !== 'undefined') {
+        setTimeout(() => window.dispatchEvent(new Event('vb-song-played')), 2000);
+      }
       set({ currentSong: prev, isPlaying: true });
     }
   },
