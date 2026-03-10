@@ -141,7 +141,7 @@ router.get('/preferences', authMiddleware, async(req, res) => {
         const result = await pool.query(
             'SELECT completed FROM user_preferences WHERE user_id = $1', [req.userId]
         );
-        res.json({ completed: result.rows[0] ? .completed || false });
+        res.json({ completed: result.rows[0]?.completed || false });
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch preferences' });
     }
