@@ -118,7 +118,7 @@ exports.searchSongs = async(req, res) => {
 // ── GET RECOMMENDATIONS (personal — based on user's listening history) ────
 exports.getRecommendations = async(req, res) => {
     try {
-        // Step 1: Get user's top genres from listening history
+        // Step 1: Get user's top genres from their listening history
         const historyResult = await pool.query(
             `SELECT s.genre, COUNT(*) AS listen_count
        FROM listening_history lh
@@ -131,53 +131,43 @@ exports.getRecommendations = async(req, res) => {
 
         const genres = historyResult.rows.map(r => r.genre);
 
-        // Step 2: No history = return empty so Top Mixes doesn't show
-        if (genres.length === 0) {
-            return res.json([]);
-        }
+        // No history = return empty so Top Mixes doesn't show
+        if (genres.length === 0) return res.json([]);
 
-        // Step 3: Get songs from those genres, excluding already-played songs
-        const playedResult = await pool.query(
-            `SELECT DISTINCT song_id FROM listening_history WHERE user_id = $1`, [req.userId]
+        // Step 2: Get VibeOrbit songs from those genres
+        const vibeorbitSongs = await pool.query(
+            `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image,
+              'vibeorbit' AS source
+       FROM songs s
+       LEFT JOIN artists a ON s.artist_id = a.id
+       WHERE s.genre = ANY($1)
+       ORDER BY s.play_count DESC
+       LIMIT 10`, [genres]
         );
-        const playedIds = playedResult.rows.map(r => r.song_id);
 
-        let songs;
-        if (playedIds.length > 0) {
-            songs = await pool.query(
-                `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
-         FROM songs s
-         LEFT JOIN artists a ON s.artist_id = a.id
-         WHERE s.genre = ANY($1)
-           AND s.id != ALL($2)
-         ORDER BY s.play_count DESC
-         LIMIT 20`, [genres, playedIds]
-            );
-        } else {
-            songs = await pool.query(
-                `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
-         FROM songs s
-         LEFT JOIN artists a ON s.artist_id = a.id
-         WHERE s.genre = ANY($1)
-         ORDER BY s.play_count DESC
-         LIMIT 20`, [genres]
-            );
-        }
+        // Step 3: Get top Deezer songs by platform play count
+        const deezerSongs = await pool.query(
+            `SELECT
+         ('dz_' || deezer_id) AS id,
+         deezer_id,
+         title,
+         artist_name,
+         cover_url,
+         audio_url,
+         play_count,
+         'deezer' AS source
+       FROM deezer_plays
+       ORDER BY play_count DESC
+       LIMIT 10`
+        );
 
-        // Step 4: If not enough results, fill with top played in same genres
-        if (songs.rows.length < 5) {
-            const fill = await pool.query(
-                `SELECT s.*, a.name AS artist_name, a.image_url AS artist_image
-         FROM songs s
-         LEFT JOIN artists a ON s.artist_id = a.id
-         WHERE s.genre = ANY($1)
-         ORDER BY s.play_count DESC
-         LIMIT 20`, [genres]
-            );
-            return res.json(fill.rows);
-        }
+        // Step 4: Merge both, sort by play_count, return top 20
+        const combined = [
+            ...vibeorbitSongs.rows,
+            ...deezerSongs.rows,
+        ].sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
 
-        res.json(songs.rows);
+        res.json(combined.slice(0, 20));
     } catch (err) {
         console.error('Recommendations error:', err);
         res.status(500).json({ error: 'Failed to fetch recommendations' });
