@@ -65,7 +65,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playSong: (song, newQueue) => {
     const current = get().currentSong;
     if (!current || current.id !== song.id) {
-      recordPlay(song);
+  recordPlay(song);
+  if (typeof window !== 'undefined') {
+    setTimeout(() => window.dispatchEvent(new Event('vb-song-played')), 2000);
+  }
       // Preload next song silently (non-Deezer only)
       const q   = newQueue ?? get().queue;
       const idx = q.findIndex((s) => s.id === song.id);
