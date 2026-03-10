@@ -27,18 +27,16 @@ interface PlayerState {
   stop:        () => void;
 }
 
-// Only record plays for all YOUR songs
 const recordPlay = (song: Song) => {
   try {
-    const token   = typeof window !== 'undefined' ? localStorage.getItem('vb_token') : null;
-    const apiUrl  = process.env.NEXT_PUBLIC_API_URL || '/api';
+    const token  = typeof window !== 'undefined' ? localStorage.getItem('vb_token') : null;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = 'Bearer ' + token;
 
     if (song.source === 'deezer') {
-      // Track Deezer plays in a separate endpoint
       fetch(apiUrl + '/deezer/play', {
-        method:  'POST',
+        method: 'POST',
         headers,
         body: JSON.stringify({
           deezer_id:   song.deezer_id,
@@ -50,7 +48,6 @@ const recordPlay = (song: Song) => {
         }),
       }).catch(() => {});
     } else {
-      // Track your own songs
       fetch(apiUrl + '/songs/' + song.id + '/play', {
         method: 'POST',
         headers,
@@ -69,10 +66,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const current = get().currentSong;
     if (!current || current.id !== song.id) {
       recordPlay(song);
-
-      // Preload next song silently (only for non-Deezer songs)
-      const q    = newQueue ?? get().queue;
-      const idx  = q.findIndex((s) => s.id === song.id);
+      // Preload next song silently (non-Deezer only)
+      const q   = newQueue ?? get().queue;
+      const idx = q.findIndex((s) => s.id === song.id);
       const next = q[idx + 1];
       if (next && next.source !== 'deezer' && typeof window !== 'undefined') {
         const preloadAudio   = new Audio();
@@ -88,8 +84,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   togglePlay: () => set((s) => ({ isPlaying: !s.isPlaying })),
+
+  // setQueue NEVER auto-plays — only updates the queue list
   setQueue: (songs) => set({ queue: songs }),
-  setVolume:  (volume) => set({ volume }),
+
+  setVolume: (volume) => set({ volume }),
 
   playNext: () => {
     const { queue, currentSong } = get();
