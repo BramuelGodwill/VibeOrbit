@@ -119,11 +119,8 @@ router.get('/history', authMiddleware, async(req, res) => {
         res.status(500).json({ error: 'Failed to fetch history' });
     }
 });
-    }
-});
 
-// ── SAVE onboarding preferences ───────────────────────────────────────────
-router.post('/preferences', authMiddleware, async(req, res) => {
+// router.post('/preferences', authMiddleware, async(req, res) => {
     const { genres, artist_names } = req.body;
     try {
         await pool.query(
