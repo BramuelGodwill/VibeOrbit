@@ -50,9 +50,11 @@ const optionalAuth = (req, res, next) => {
 
 // ── Public routes ─────────────────────────────────────────────────────────
 router.get('/', optionalAuth, songs.getAllSongs);
-
 router.get('/trending', songs.getTrending);
 router.get('/search', songs.searchSongs);
+
+// ── Auth required (MUST be before /:id to avoid route conflict) ───────────
+router.get('/recommendations', authMiddleware, songs.getRecommendations);
 
 // ── Record a play ─────────────────────────────────────────────────────────
 router.post('/:id/play', optionalAuth, async(req, res) => {
@@ -71,8 +73,7 @@ router.post('/:id/play', optionalAuth, async(req, res) => {
     }
 });
 
-// ── Auth required ─────────────────────────────────────────────────────────
-router.get('/recommendations', authMiddleware, songs.getRecommendations);
+// ── Single song (MUST be after all named GET routes) ─────────────────────
 router.get('/:id', optionalAuth, songs.getSong);
 
 // ── Admin only ────────────────────────────────────────────────────────────
