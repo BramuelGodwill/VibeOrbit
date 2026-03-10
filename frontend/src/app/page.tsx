@@ -74,6 +74,13 @@ function SongCard({ song, queue }: { song: any; queue: any[] }) {
             }
           </div>
         </div>
+        {song.source === 'deezer' && (
+          <div className="absolute top-1.5 left-1.5">
+            <span className="text-[9px] bg-purple-500/70 text-white px-1.5 py-0.5 rounded-full">
+              30s
+            </span>
+          </div>
+        )}
       </div>
       <p className="text-xs font-semibold truncate">{song.title}</p>
       <p className="text-[11px] text-white/35 truncate mt-0.5">{song.artist_name || 'Unknown'}</p>
@@ -82,17 +89,18 @@ function SongCard({ song, queue }: { song: any; queue: any[] }) {
 }
 
 export default function HomePage() {
-  const [allSongs,    setAllSongs]    = useState<any[]>([]);
-  const [likedSongs,  setLikedSongs]  = useState<any[]>([]);
-  const [recent,      setRecent]      = useState<any[]>([]);
-  const [recommended, setRecommended] = useState<any[]>([]);
-  const [popular,     setPopular]     = useState<any[]>([]);
-  const [genre,       setGenre]       = useState('All');
-  const [loading,     setLoading]     = useState(true);
-  const [refreshing,  setRefreshing]  = useState(false);
-  const [greeting,    setGreeting]    = useState('Good morning');
-  const { setQueue }                  = usePlayerStore();
-  const { user }                      = useAuthStore();
+  const [allSongs,       setAllSongs]       = useState<any[]>([]);
+  const [deezerTrending, setDeezerTrending] = useState<any[]>([]);
+  const [likedSongs,     setLikedSongs]     = useState<any[]>([]);
+  const [recent,         setRecent]         = useState<any[]>([]);
+  const [recommended,    setRecommended]    = useState<any[]>([]);
+  const [popular,        setPopular]        = useState<any[]>([]);
+  const [genre,          setGenre]          = useState('All');
+  const [loading,        setLoading]        = useState(true);
+  const [refreshing,     setRefreshing]     = useState(false);
+  const [greeting,       setGreeting]       = useState('Good morning');
+  const { setQueue }                        = usePlayerStore();
+  const { user }                            = useAuthStore();
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -102,7 +110,7 @@ export default function HomePage() {
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      // ── All songs ──────────────────────────────────────────────
+      // ── All VibeOrbit songs ────────────────────────────────────
       const songsRes     = await api.get('/songs');
       const songs: any[] = Array.isArray(songsRes.data)
         ? songsRes.data
@@ -110,7 +118,19 @@ export default function HomePage() {
       setAllSongs(songs);
       setQueue(songs);
 
-      // ── Popular = VibeOrbit + Deezer merged by play count ──────
+      // ── Deezer trending for All Songs section ─────────────────
+      let trending: any[] = [];
+      try {
+        const trendRes = await api.get('/deezer/trending?limit=20');
+        trending = Array.isArray(trendRes.data)
+          ? trendRes.data
+          : (trendRes.data.songs || []);
+        setDeezerTrending(trending);
+      } catch {
+        setDeezerTrending([]);
+      }
+
+      // ── Popular = VibeOrbit + Deezer top-plays merged ──────────
       let deezerPlays: any[] = [];
       try {
         const dzRes = await api.get('/deezer/top-plays');
@@ -120,7 +140,7 @@ export default function HomePage() {
       } catch {}
 
       const allForPopular = [
-        ...songs.map(s      => ({ ...s, _source: 'vibeorbit' })),
+        ...songs.map(s       => ({ ...s, _source: 'vibeorbit' })),
         ...deezerPlays.map(s => ({ ...s, _source: 'deezer'    })),
       ];
       const sorted = [...allForPopular].sort(
@@ -128,43 +148,42 @@ export default function HomePage() {
       );
       setPopular(sorted.slice(0, 10));
 
-      // ── Recommendations ────────────────────────────────────────
-      try {
-        const recRes  = await api.get('/songs/recommendations');
-        const recData = Array.isArray(recRes.data)
-          ? recRes.data
-          : (recRes.data.songs || []);
-        const recSorted = [...recData].sort(
-          (a, b) => (b.play_count || 0) - (a.play_count || 0)
-        );
-        setRecommended(recSorted.slice(0, 10));
-      } catch {
-        setRecommended(sorted.slice(0, 10));
-      }
-
       // ── Liked songs ────────────────────────────────────────────
       try {
         const likesRes  = await api.get('/users/likes');
         const likesData = Array.isArray(likesRes.data)
           ? likesRes.data
           : (likesRes.data.songs || []);
-        const likesSorted = [...likesData].sort(
-          (a, b) => (b.play_count || 0) - (a.play_count || 0)
-        );
-        setLikedSongs(likesSorted.slice(0, 10));
+        setLikedSongs(likesData.slice(0, 10));
       } catch {
         setLikedSongs([]);
       }
 
       // ── Jump back in ───────────────────────────────────────────
+      let histData: any[] = [];
       try {
-        const histRes  = await api.get('/users/history');
-        const histData = Array.isArray(histRes.data)
+        const histRes = await api.get('/users/history');
+        histData = Array.isArray(histRes.data)
           ? histRes.data
           : (histRes.data.songs || []);
         setRecent(histData.slice(0, 2));
       } catch {
         setRecent([]);
+      }
+
+      // ── Recommendations (only if user has history) ─────────────
+      if (histData.length > 0) {
+        try {
+          const recRes  = await api.get('/songs/recommendations');
+          const recData = Array.isArray(recRes.data)
+            ? recRes.data
+            : (recRes.data.songs || []);
+          setRecommended(recData.slice(0, 10));
+        } catch {
+          setRecommended(sorted.slice(0, 10));
+        }
+      } else {
+        setRecommended([]);
       }
 
     } catch {}
@@ -176,8 +195,16 @@ export default function HomePage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // All Songs = VibeOrbit + Deezer trending (deduped by title)
+  const allCombined = [
+    ...allSongs,
+    ...deezerTrending.filter(d =>
+      !allSongs.some(s => s.title.toLowerCase() === d.title.toLowerCase())
+    ),
+  ];
+
   const filteredSongs = genre === 'All'
-    ? allSongs
+    ? allCombined
     : allSongs.filter(s => s.genre === genre || s.type === genre.toLowerCase());
 
   const throwbacks = allSongs.filter(s =>
@@ -288,8 +315,8 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── TOP MIXES ── */}
-      {recommended.length > 0 && genre === 'All' && (
+      {/* ── TOP MIXES — only if user has listening history ── */}
+      {recommended.length > 0 && recent.length > 0 && genre === 'All' && (
         <section>
           <div className="flex items-center gap-2 mb-1">
             <Headphones size={15} className="text-white/40" />
@@ -380,7 +407,7 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── ALL / FILTERED ── */}
+      {/* ── ALL / FILTERED SONGS ── */}
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-bold">

@@ -88,7 +88,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   togglePlay: () => set((s) => ({ isPlaying: !s.isPlaying })),
-  setQueue:   (queue)  => set({ queue }),
+  setQueue: (songs) => set({ queue: songs }),
   setVolume:  (volume) => set({ volume }),
 
   playNext: () => {
