@@ -166,7 +166,7 @@ export default function HomePage() {
         histData = Array.isArray(histRes.data)
           ? histRes.data
           : (histRes.data.songs || []);
-        setRecent(histData.slice(0, 2));
+        setRecent(histData.slice(0, 5));
       } catch {
         setRecent([]);
       }
@@ -295,7 +295,7 @@ export default function HomePage() {
             <h2 className="text-base font-bold">Jump back in</h2>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {recent.slice(0, 2).map(song => (
+            {recent.slice(0, 5).map(song => (
               <div key={song.id}
                 onClick={() => usePlayerStore.getState().playSong(song, recent)}
                 className="group flex items-center gap-2.5 bg-white/[0.06] hover:bg-white/10 active:bg-white/15 rounded-xl p-2.5 cursor-pointer transition-all">
