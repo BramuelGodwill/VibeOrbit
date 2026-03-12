@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Music2, X,
-  Repeat, Repeat1, Share2, Heart, ListPlus, Radio
+  Repeat, Repeat1, Share2, Heart, ListPlus, Radio, ExternalLink
 } from 'lucide-react';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore }   from '@/store/authStore';
@@ -34,8 +34,24 @@ export default function PlayerBar() {
   const [playlists,setPlaylists]= useState<any[]>([]);
   const [showPL,   setShowPL]   = useState(false);
   const [addedMsg, setAddedMsg] = useState('');
+  const [amackUrl, setAmackUrl] = useState<string | null>(null);
 
   const isDeezer = currentSong?.source === 'deezer';
+
+  // ── Fetch Audiomack URL when Deezer song plays ─────────────────────────
+  useEffect(() => {
+    setAmackUrl(null);
+    if (!isDeezer || !currentSong) return;
+    api.get('/audiomack/search', {
+      params: {
+        title:  currentSong.title,
+        artist: currentSong.artist_name,
+      },
+    }).then(res => {
+      const url = res.data?.result?.url;
+      if (url) setAmackUrl(url);
+    }).catch(() => {});
+  }, [currentSong?.id]);
 
   // ── Load + play new song ───────────────────────────────────────────────
   useEffect(() => {
@@ -122,7 +138,6 @@ export default function PlayerBar() {
     setLoop(l => l === 'none' ? 'all' : l === 'all' ? 'one' : 'none');
 
   const handleLike = async () => {
-    // Deezer previews cannot be liked (not in your DB)
     if (!isAuthenticated() || !currentSong || isDeezer) return;
     const newLiked = !liked;
     setLiked(newLiked);
@@ -147,7 +162,6 @@ export default function PlayerBar() {
   };
 
   const loadPlaylists = async () => {
-    // Cannot add Deezer previews to playlists
     if (!isAuthenticated() || isDeezer) {
       setAddedMsg(isDeezer ? 'Only full songs can be added to playlists' : '');
       setTimeout(() => setAddedMsg(''), 2500);
@@ -185,6 +199,22 @@ export default function PlayerBar() {
       <Radio size={9} /> 30s preview
     </span>
   );
+
+  // ── Audiomack button ──────────────────────────────────────────────────
+  const AudiomackBtn = ({ size = 'sm' }: { size?: 'sm' | 'lg' }) => {
+    if (!isDeezer || !amackUrl) return null;
+    return (
+      <a href={amackUrl} target="_blank" rel="noopener noreferrer"
+        className={`inline-flex items-center gap-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 font-semibold rounded-full transition-all ${
+          size === 'lg'
+            ? 'text-xs px-3 py-1.5'
+            : 'text-[10px] px-2.5 py-1'
+        }`}>
+        <ExternalLink size={size === 'lg' ? 11 : 9} />
+        Full song on Audiomack
+      </a>
+    );
+  };
 
   const audioEl = (
     <audio
@@ -253,7 +283,10 @@ export default function PlayerBar() {
             <div className="min-w-0 flex-1">
               <h2 className="text-xl font-black truncate">{currentSong.title}</h2>
               <p className="text-white/50 text-sm mt-0.5">{currentSong.artist_name || 'Unknown Artist'}</p>
-              {isDeezer && <div className="mt-1.5"><DeezerBadge /></div>}
+              {isDeezer && <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                <DeezerBadge />
+                <AudiomackBtn size="sm" />
+              </div>}
             </div>
             <div className="flex items-center gap-3 shrink-0 ml-4">
               <button onClick={handleLike}
@@ -269,8 +302,14 @@ export default function PlayerBar() {
             </div>
           </div>
 
-          {/* Deezer info message */}
-          {isDeezer && (
+          {/* Audiomack CTA for Deezer songs */}
+          {isDeezer && amackUrl && (
+            <div className="w-full max-w-xs mb-3">
+              <AudiomackBtn size="lg" />
+            </div>
+          )}
+
+          {isDeezer && !amackUrl && (
             <p className="text-white/25 text-xs text-center mb-4 max-w-xs">
               This is a 30-second Deezer preview. Search on VibeOrbit for full songs.
             </p>
@@ -342,29 +381,28 @@ export default function PlayerBar() {
           style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
           {audioEl}
           <div className="flex items-center gap-2">
-            {/* Cover — tap to expand */}
             <div onClick={() => setExpanded(true)}
               className="w-10 h-10 rounded-lg bg-white/10 overflow-hidden shrink-0 cursor-pointer active:opacity-70 relative">
               {currentSong.cover_url
                 ? <img src={currentSong.cover_url} alt="" className="w-full h-full object-cover" />
                 : <Music2 size={14} className="m-auto mt-3 text-white/20" />
               }
-              {/* Purple dot for Deezer */}
               {isDeezer && (
                 <div className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-purple-400" />
               )}
             </div>
 
-            {/* Title — tap to expand */}
             <div onClick={() => setExpanded(true)} className="flex-1 min-w-0 cursor-pointer">
               <p className="text-sm font-semibold truncate leading-tight">{currentSong.title}</p>
               <div className="flex items-center gap-1.5">
                 <p className="text-xs text-white/35 truncate">{currentSong.artist_name || 'Unknown'}</p>
-                {isDeezer && <DeezerBadge />}
+                {isDeezer && amackUrl
+                  ? <AudiomackBtn size="sm" />
+                  : isDeezer && <DeezerBadge />
+                }
               </div>
             </div>
 
-            {/* Like — disabled for Deezer */}
             <button onClick={handleLike}
               className={`p-1.5 active:scale-90 transition-all ${
                 isDeezer ? 'text-white/15' :
@@ -372,11 +410,9 @@ export default function PlayerBar() {
               }`}>
               <Heart size={17} fill={liked ? 'currentColor' : 'none'} />
             </button>
-            {/* Prev */}
             <button onClick={playPrev} className="p-1.5 text-white/40 active:scale-90 transition-all">
               <SkipBack size={18} />
             </button>
-            {/* Play/Pause */}
             <button onClick={togglePlay}
               className="w-9 h-9 rounded-full bg-white flex items-center justify-center shrink-0 active:scale-90 transition-transform">
               {isPlaying
@@ -384,7 +420,6 @@ export default function PlayerBar() {
                 : <Play  size={14} fill="black" className="ml-0.5" />
               }
             </button>
-            {/* Next */}
             <button onClick={playNext} className="p-1.5 text-white/40 active:scale-90 transition-all">
               <SkipForward size={18} />
             </button>
@@ -415,9 +450,12 @@ export default function PlayerBar() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold truncate">{currentSong.title}</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                   <p className="text-xs text-white/35 truncate">{currentSong.artist_name || 'Unknown'}</p>
-                  {isDeezer && <DeezerBadge />}
+                  {isDeezer && amackUrl
+                    ? <AudiomackBtn size="sm" />
+                    : isDeezer && <DeezerBadge />
+                  }
                 </div>
               </div>
               <button onClick={handleLike}
@@ -450,7 +488,7 @@ export default function PlayerBar() {
                 <button onClick={playNext} className="text-white/40 hover:text-white transition-colors">
                   <SkipForward size={18} />
                 </button>
-                <button onClick={loadPlaylists} title={isDeezer ? 'Not available for previews' : 'Add to playlist'}
+                <button onClick={loadPlaylists}
                   className={`transition-colors ${isDeezer ? 'text-white/15 cursor-not-allowed' : 'text-white/25 hover:text-white'}`}>
                   <ListPlus size={18} />
                 </button>
