@@ -31,6 +31,7 @@ app.use('/api/playlists', playlistRoutes);
 app.use('/api/pay', payRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/deezer', require('./routes/deezer'));
+app.use('/api/audiomack', require('./routes/audiomack'));
 
 // ── Health check (keeps Render awake) ────────────────────────────────────
 app.get('/', (req, res) => {
