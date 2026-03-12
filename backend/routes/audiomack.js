@@ -1,37 +1,62 @@
-const router         = require('express').Router();
-const OAuth          = require('oauth-1.0a');
-const crypto         = require('crypto');
+const router = require('express').Router();
+const crypto = require('crypto');
 
-const oauth = OAuth({
-  consumer: {
-    key:    process.env.AUDIOMACK_KEY    || 'vibeorbit',
-    secret: process.env.AUDIOMACK_SECRET || 'ffe308915cb6f25b711dc235d2514ddd',
-  },
-  signature_method: 'HMAC-SHA1',
-  hash_function(base, key) {
-    return crypto.createHmac('sha1', key).update(base).digest('base64');
-  },
-});
+const CONSUMER_KEY    = process.env.AUDIOMACK_KEY    || 'vibeorbit';
+const CONSUMER_SECRET = process.env.AUDIOMACK_SECRET || 'ffe308915cb6f25b711dc235d2514ddd';
 
-// ── SEARCH Audiomack by title + artist ───────────────────────────────────
+function buildOAuthHeader(method, baseUrl, extraParams = {}) {
+  const oauthParams = {
+    oauth_consumer_key:     CONSUMER_KEY,
+    oauth_nonce:            crypto.randomBytes(16).toString('hex'),
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp:        Math.floor(Date.now() / 1000).toString(),
+    oauth_version:          '1.0',
+  };
+
+  // Merge all params for signature base
+  const allParams = { ...extraParams, ...oauthParams };
+
+  // Sort and encode
+  const sortedParams = Object.keys(allParams)
+    .sort()
+    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(allParams[k])}`)
+    .join('&');
+
+  const signatureBase = [
+    method.toUpperCase(),
+    encodeURIComponent(baseUrl),
+    encodeURIComponent(sortedParams),
+  ].join('&');
+
+  // Sign with consumer secret + empty token secret
+  const signingKey = `${encodeURIComponent(CONSUMER_SECRET)}&`;
+  const signature  = crypto.createHmac('sha1', signingKey).update(signatureBase).digest('base64');
+
+  oauthParams.oauth_signature = signature;
+
+  const headerValue = 'OAuth ' + Object.keys(oauthParams)
+    .map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`)
+    .join(', ');
+
+  return headerValue;
+}
+
+// ── SEARCH Audiomack ──────────────────────────────────────────────────────
 router.get('/search', async (req, res) => {
   try {
     const { title, artist } = req.query;
     if (!title) return res.status(400).json({ error: 'title is required' });
 
-    const url = 'https://api.audiomack.com/v1/search_onelink';
-    const params = { title, titletype: 'song' };
-    if (artist) params.artist = artist;
+    const baseUrl    = 'https://api.audiomack.com/v1/search_onelink';
+    const queryParams = { title, titletype: 'song' };
+    if (artist) queryParams.artist = artist;
 
-    const requestData = { url, method: 'GET' };
-    const authHeader  = oauth.toHeader(oauth.authorize(requestData));
+    const authHeader = buildOAuthHeader('GET', baseUrl, queryParams);
+    const qs         = Object.entries(queryParams)
+      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 
-    // Build query string
-    const qs = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-    const fullUrl = `${url}?${qs}`;
-
-    const response = await fetch(fullUrl, {
-      headers: { Authorization: authHeader.Authorization },
+    const response = await fetch(`${baseUrl}?${qs}`, {
+      headers: { Authorization: authHeader },
     });
     const data = await response.json();
     res.json(data);
@@ -41,24 +66,22 @@ router.get('/search', async (req, res) => {
   }
 });
 
-// ── GET stream URL for a song ─────────────────────────────────────────────
+// ── GET stream URL ────────────────────────────────────────────────────────
 router.get('/stream', async (req, res) => {
   try {
     const { title, artist } = req.query;
     if (!title) return res.status(400).json({ error: 'title is required' });
 
-    const url = 'https://api.audiomack.com/v1/search_onelink';
-    const params = { title, titletype: 'song' };
-    if (artist) params.artist = artist;
+    const baseUrl     = 'https://api.audiomack.com/v1/search_onelink';
+    const queryParams = { title, titletype: 'song' };
+    if (artist) queryParams.artist = artist;
 
-    const requestData = { url, method: 'GET' };
-    const authHeader  = oauth.toHeader(oauth.authorize(requestData));
+    const authHeader = buildOAuthHeader('GET', baseUrl, queryParams);
+    const qs         = Object.entries(queryParams)
+      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 
-    const qs = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-    const fullUrl = `${url}?${qs}`;
-
-    const response = await fetch(fullUrl, {
-      headers: { Authorization: authHeader.Authorization },
+    const response = await fetch(`${baseUrl}?${qs}`, {
+      headers: { Authorization: authHeader },
     });
     const data = await response.json();
 
@@ -71,7 +94,7 @@ router.get('/stream', async (req, res) => {
         music_id:    data.result.music_id,
       });
     } else {
-      res.json({ stream_url: null });
+      res.json({ stream_url: null, raw: data });
     }
   } catch (err) {
     console.error('Audiomack stream error:', err);
